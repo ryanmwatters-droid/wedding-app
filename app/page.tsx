@@ -75,7 +75,7 @@ export default function HomePage() {
         <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
           <div className="flex justify-between items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-medium text-charcoal mb-1">Just Between Us</h2>
+              <h2 className="text-sm font-medium text-charcoal mb-1">Wedding Chat</h2>
               {latestMessage ? (
                 <p className="text-sm text-grey-soft truncate italic">&ldquo;{latestMessage.text}&rdquo;</p>
               ) : (

@@ -6,9 +6,13 @@ import { supabase } from '@/lib/supabase'
 import { Message } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 
-function shortName(email: string | null | undefined): string {
-  if (!email) return 'Them'
-  return email.split('@')[0].split('.')[0].replace(/^./, c => c.toUpperCase())
+function senderInfo(email: string | null | undefined): { name: string; bubble: string } {
+  const local = (email || '').toLowerCase().split('@')[0]
+  if (local.includes('ryan')) return { name: 'Ryan', bubble: 'bg-sage-primary text-white' }
+  if (local.includes('hannah')) return { name: 'Hannah', bubble: 'bg-rose-accent text-white' }
+  if (local.includes('sue')) return { name: 'Sue', bubble: 'bg-dusty-blue text-white' }
+  const fallback = email ? email.split('@')[0].split('.')[0].replace(/^./, c => c.toUpperCase()) : 'Them'
+  return { name: fallback, bubble: 'bg-grey-soft text-white' }
 }
 
 export default function MessagesPage() {
@@ -103,7 +107,7 @@ export default function MessagesPage() {
       <div className="max-w-2xl w-full mx-auto flex-1 flex flex-col p-4">
         <div className="flex justify-between items-center mb-4">
           <Link href="/" className="text-sm text-grey-soft hover:text-charcoal transition-colors">← Home</Link>
-          <h1 className="text-2xl font-serif text-charcoal">Just Between Us</h1>
+          <h1 className="text-2xl font-serif text-charcoal">Wedding Chat</h1>
           <button onClick={logout} className="px-3 py-1 text-sm text-grey-soft hover:text-charcoal transition-colors">Logout</button>
         </div>
 
@@ -123,14 +127,15 @@ export default function MessagesPage() {
             <div className="space-y-3">
               {messages.map(m => {
                 const isMine = m.user_id === session.user.id
+                const { name, bubble } = senderInfo(m.user_email)
                 return (
                   <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] group`}>
-                      <div className={`px-4 py-2 rounded-2xl ${isMine ? 'bg-sage-primary text-white rounded-br-sm' : 'bg-rose-accent/15 text-charcoal rounded-bl-sm'}`}>
+                    <div className="max-w-[75%] group">
+                      <div className={`px-4 py-2 rounded-2xl ${bubble} ${isMine ? 'rounded-br-sm' : 'rounded-bl-sm'}`}>
                         <div className="text-sm whitespace-pre-wrap break-words">{m.text}</div>
                       </div>
                       <div className={`flex items-center gap-2 mt-1 text-[10px] text-grey-soft ${isMine ? 'justify-end' : 'justify-start'}`}>
-                        <span>{isMine ? 'You' : shortName(m.user_email)}</span>
+                        <span>{isMine ? 'You' : name}</span>
                         <span>·</span>
                         <span>{new Date(m.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
                         {isMine && (
