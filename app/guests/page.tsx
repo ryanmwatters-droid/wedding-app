@@ -54,12 +54,138 @@ function ContactList({ label, values, onChange, placeholder }: {
   )
 }
 
+function StatusPill({ label, active, onClick }: { label: string; active: boolean; onClick: (e: React.MouseEvent) => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick(e) }}
+      className={`w-7 h-7 rounded-full text-xs font-medium transition-colors flex items-center justify-center ${active ? 'bg-rose-accent text-white' : 'bg-grey-soft/15 text-grey-soft hover:bg-grey-soft/25'}`}
+      title={label}
+      aria-label={label}
+    >
+      {label[0]}
+    </button>
+  )
+}
+
+function AttendingDot({ attending }: { attending: boolean | null }) {
+  const color = attending === true ? 'bg-sage-primary' : attending === false ? 'bg-rose-accent/60' : 'bg-grey-soft/30'
+  const label = attending === true ? 'Yes' : attending === false ? 'No' : '—'
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className={`w-2 h-2 rounded-full ${color}`} />
+      <span className="text-xs text-grey-soft w-6">{label}</span>
+    </div>
+  )
+}
+
+function GuestDetail({ guest, onUpdate, onDelete, onClose }: {
+  guest: Guest
+  onUpdate: (id: string, updates: Partial<Guest>) => void
+  onDelete: (id: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="p-4">
+      <div className="flex justify-between items-start gap-2 mb-4">
+        <input
+          defaultValue={guest.name}
+          onBlur={(e) => { if (e.target.value !== guest.name && e.target.value.trim()) onUpdate(guest.id, { name: e.target.value.trim() }) }}
+          className="flex-1 text-xl font-serif text-charcoal bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none px-1"
+        />
+        <button onClick={onClose} className="text-grey-soft hover:text-charcoal text-xl px-2" aria-label="Close">×</button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <ContactList
+          label="Email"
+          values={guest.email || []}
+          onChange={(next) => onUpdate(guest.id, { email: next })}
+          placeholder="email@example.com"
+        />
+        <ContactList
+          label="Phone"
+          values={guest.phone || []}
+          onChange={(next) => onUpdate(guest.id, { phone: next })}
+          placeholder="555-555-5555"
+        />
+      </div>
+
+      <textarea
+        defaultValue={guest.address || ''}
+        onBlur={(e) => { if (e.target.value !== (guest.address || '')) onUpdate(guest.id, { address: e.target.value || null }) }}
+        placeholder="Mailing address"
+        rows={2}
+        className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 mb-3"
+      />
+
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <label className="flex items-center gap-1 text-sm text-charcoal">
+          Party size:
+          <input
+            type="number"
+            min={1}
+            value={guest.party_size}
+            onChange={(e) => onUpdate(guest.id, { party_size: parseInt(e.target.value) || 1 })}
+            className="w-14 px-2 py-1 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+          />
+        </label>
+        <input
+          defaultValue={guest.meal || ''}
+          onBlur={(e) => { if (e.target.value !== (guest.meal || '')) onUpdate(guest.id, { meal: e.target.value || null }) }}
+          placeholder="Meal choice"
+          className="flex-1 min-w-[120px] px-3 py-1 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        <button
+          onClick={() => onUpdate(guest.id, { invitation_sent: !guest.invitation_sent })}
+          className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.invitation_sent ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+        >
+          {guest.invitation_sent ? '✓ Invitation sent' : 'Invitation sent'}
+        </button>
+        <button
+          onClick={() => onUpdate(guest.id, { rsvp_received: !guest.rsvp_received })}
+          className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.rsvp_received ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+        >
+          {guest.rsvp_received ? '✓ RSVP received' : 'RSVP received'}
+        </button>
+        <select
+          value={guest.attending === null ? '' : guest.attending ? 'yes' : 'no'}
+          onChange={(e) => onUpdate(guest.id, { attending: e.target.value === '' ? null : e.target.value === 'yes' })}
+          className="px-3 py-1 text-xs rounded-full border border-sage-primary/40 bg-sage-primary/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-sage-primary/40"
+        >
+          <option value="">Attending?</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      </div>
+
+      <textarea
+        defaultValue={guest.notes || ''}
+        onBlur={(e) => { if (e.target.value !== (guest.notes || '')) onUpdate(guest.id, { notes: e.target.value || null }) }}
+        placeholder="Notes..."
+        rows={2}
+        className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 placeholder:text-grey-soft/60 mb-4"
+      />
+
+      <button
+        onClick={() => { onDelete(guest.id); onClose() }}
+        className="text-xs text-grey-soft hover:text-red-500 transition-colors"
+      >
+        Delete guest
+      </button>
+    </div>
+  )
+}
+
 export default function GuestsPage() {
   const { session, logout } = useAuth()
   const [guests, setGuests] = useState<Guest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newName, setNewName] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!session) return
@@ -94,6 +220,12 @@ export default function GuestsPage() {
 
     return () => { channel.unsubscribe() }
   }, [session])
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedId(null) }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [])
 
   const addGuest = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -157,6 +289,8 @@ export default function GuestsPage() {
   const attending = guests.filter(g => g.attending).reduce((s, g) => s + (g.party_size || 1), 0)
   const declined = guests.filter(g => g.attending === false).length
 
+  const selectedGuest = guests.find(g => g.id === selectedId) || null
+
   return (
     <div className="min-h-screen bg-cream p-4">
       <div className="max-w-2xl mx-auto">
@@ -204,98 +338,54 @@ export default function GuestsPage() {
           <button type="submit" disabled={!newName.trim()} className="px-4 py-2 bg-sage-primary text-white rounded-xl text-sm hover:bg-sage-primary/90 disabled:opacity-50 transition-colors">Add</button>
         </form>
 
-        <div className="space-y-3">
-          {guests.length === 0 && (
-            <div className="text-center text-grey-soft py-8">No guests yet. Add your first one above.</div>
-          )}
-          {guests.map(g => (
-            <div key={g.id} className="bg-white rounded-2xl border border-grey-soft/20 p-4">
-              <div className="flex justify-between items-start gap-2 mb-3">
-                <input
-                  defaultValue={g.name}
-                  onBlur={(e) => { if (e.target.value !== g.name && e.target.value.trim()) updateGuest(g.id, { name: e.target.value.trim() }) }}
-                  className="flex-1 text-lg font-medium text-charcoal bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none px-1"
-                />
-                <button onClick={() => deleteGuest(g.id)} className="text-grey-soft hover:text-red-500 transition-colors text-sm px-2">×</button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-                <ContactList
-                  label="Email"
-                  values={g.email || []}
-                  onChange={(next) => updateGuest(g.id, { email: next })}
-                  placeholder="email@example.com"
-                />
-                <ContactList
-                  label="Phone"
-                  values={g.phone || []}
-                  onChange={(next) => updateGuest(g.id, { phone: next })}
-                  placeholder="555-555-5555"
-                />
-              </div>
-
-              <textarea
-                defaultValue={g.address || ''}
-                onBlur={(e) => { if (e.target.value !== (g.address || '')) updateGuest(g.id, { address: e.target.value || null }) }}
-                placeholder="Mailing address"
-                rows={2}
-                className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 mb-3"
-              />
-
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <label className="flex items-center gap-1 text-sm text-charcoal">
-                  Party size:
-                  <input
-                    type="number"
-                    min={1}
-                    value={g.party_size}
-                    onChange={(e) => updateGuest(g.id, { party_size: parseInt(e.target.value) || 1 })}
-                    className="w-14 px-2 py-1 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
-                  />
-                </label>
-                <input
-                  defaultValue={g.meal || ''}
-                  onBlur={(e) => { if (e.target.value !== (g.meal || '')) updateGuest(g.id, { meal: e.target.value || null }) }}
-                  placeholder="Meal choice"
-                  className="flex-1 min-w-[120px] px-3 py-1 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${g.invitation_sent ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
-                >
-                  {g.invitation_sent ? '✓ Invitation sent' : 'Invitation sent'}
-                </button>
-                <button
-                  onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })}
-                  className={`px-3 py-1 text-xs rounded-full transition-colors ${g.rsvp_received ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
-                >
-                  {g.rsvp_received ? '✓ RSVP received' : 'RSVP received'}
-                </button>
-                <select
-                  value={g.attending === null ? '' : g.attending ? 'yes' : 'no'}
-                  onChange={(e) => updateGuest(g.id, { attending: e.target.value === '' ? null : e.target.value === 'yes' })}
-                  className="px-3 py-1 text-xs rounded-full border border-sage-primary/40 bg-sage-primary/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-sage-primary/40"
-                >
-                  <option value="">Attending?</option>
-                  <option value="yes">Yes</option>
-                  <option value="no">No</option>
-                </select>
-              </div>
-
-              <textarea
-                defaultValue={g.notes || ''}
-                onBlur={(e) => { if (e.target.value !== (g.notes || '')) updateGuest(g.id, { notes: e.target.value || null }) }}
-                placeholder="Notes..."
-                rows={1}
-                className="mt-3 w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 placeholder:text-grey-soft/60"
-              />
+        {guests.length === 0 ? (
+          <div className="text-center text-grey-soft py-8">No guests yet. Add your first one above.</div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-grey-soft/20 overflow-hidden">
+            <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-4 py-2 text-xs text-grey-soft border-b border-grey-soft/15">
+              <div>Name</div>
+              <div className="text-center w-12">Party</div>
+              <div className="text-center w-7" title="Invitation sent">Inv</div>
+              <div className="text-center w-7" title="RSVP received">RSVP</div>
+              <div className="text-center w-12">Attending</div>
             </div>
-          ))}
-        </div>
+            {guests.map(g => (
+              <button
+                key={g.id}
+                onClick={() => setSelectedId(g.id)}
+                className="w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0"
+              >
+                <div className="min-w-0">
+                  <div className="text-charcoal font-medium truncate">{g.name}</div>
+                </div>
+                <div className="text-sm text-grey-soft text-center w-12">{g.party_size}</div>
+                <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} />
+                <StatusPill label="RSVP received" active={g.rsvp_received} onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })} />
+                <div className="w-12 flex justify-center"><AttendingDot attending={g.attending} /></div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {selectedGuest && (
+        <div
+          className="fixed inset-0 z-50 bg-charcoal/40 flex items-end sm:items-center justify-center"
+          onClick={() => setSelectedId(null)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GuestDetail
+              guest={selectedGuest}
+              onUpdate={updateGuest}
+              onDelete={deleteGuest}
+              onClose={() => setSelectedId(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
