@@ -9,18 +9,17 @@ export default function HomePage() {
   const { session, logout } = useAuth()
   const [taskStats, setTaskStats] = useState({ total: 0, completed: 0 })
   const [guestStats, setGuestStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
-  const [sharedNote, setSharedNote] = useState('')
-  const [noteId, setNoteId] = useState('')
+  const [latestMessage, setLatestMessage] = useState<{ text: string; user_email: string | null } | null>(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, noteRes] = await Promise.all([
+      const [tasksRes, guestsRes, msgRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
-        supabase.from('shared_notes').select('*').single()
+        supabase.from('messages').select('text, user_email').order('created_at', { ascending: false }).limit(1)
       ])
 
       if (tasksRes.data) {
@@ -39,9 +38,8 @@ export default function HomePage() {
         })
       }
 
-      if (noteRes.data) {
-        setSharedNote(noteRes.data.text || '')
-        setNoteId(noteRes.data.id)
+      if (msgRes.data && msgRes.data.length > 0) {
+        setLatestMessage(msgRes.data[0])
       }
     }
 
@@ -49,27 +47,13 @@ export default function HomePage() {
 
     const channel = supabase
       .channel('home-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shared_notes' }, (payload) => {
-        if (payload.eventType === 'UPDATE') setSharedNote(payload.new.text)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        setLatestMessage({ text: payload.new.text, user_email: payload.new.user_email })
       })
       .subscribe()
 
     return () => { channel.unsubscribe() }
   }, [session])
-
-  const updateSharedNote = async (text: string) => {
-    if (!noteId) return
-    try {
-      const { error } = await supabase
-        .from('shared_notes')
-        .update({ text, updated_by: session?.user.id, updated_at: new Date().toISOString() })
-        .eq('id', noteId)
-      if (error) throw error
-    } catch (err) {
-      console.error('Error updating note:', err)
-      setError('Failed to save note.')
-    }
-  }
 
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
 
@@ -88,17 +72,19 @@ export default function HomePage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>
         )}
 
-        <div className="bg-white rounded-2xl p-4 mb-6 border border-grey-soft/20">
-          <h2 className="text-sm font-medium text-charcoal mb-2">Just Between Us</h2>
-          <textarea
-            value={sharedNote}
-            onChange={(e) => setSharedNote(e.target.value)}
-            onBlur={() => updateSharedNote(sharedNote)}
-            placeholder="Leave a note for each other..."
-            className="w-full p-3 border border-grey-soft/30 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
-            rows={2}
-          />
-        </div>
+        <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
+          <div className="flex justify-between items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-medium text-charcoal mb-1">Just Between Us</h2>
+              {latestMessage ? (
+                <p className="text-sm text-grey-soft truncate italic">&ldquo;{latestMessage.text}&rdquo;</p>
+              ) : (
+                <p className="text-sm text-grey-soft italic">Start a conversation...</p>
+              )}
+            </div>
+            <span className="text-grey-soft">→</span>
+          </div>
+        </Link>
 
         <div className="grid gap-4">
           <Link href="/tasks" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-sage-primary/40 transition-colors">

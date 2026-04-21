@@ -1,3 +1,11 @@
+export interface Message {
+  id: string
+  user_id: string
+  user_email: string | null
+  text: string
+  created_at: string
+}
+
 export interface Guest {
   id: string
   name: string
