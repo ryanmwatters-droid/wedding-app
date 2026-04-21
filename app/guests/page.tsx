@@ -6,6 +6,54 @@ import { supabase } from '@/lib/supabase'
 import { Guest } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 
+function ContactList({ label, values, onChange, placeholder }: {
+  label: string
+  values: string[]
+  onChange: (next: string[]) => void
+  placeholder: string
+}) {
+  const entries = values.length === 0 ? [''] : values
+  return (
+    <div>
+      <div className="text-xs text-grey-soft mb-1">{label}</div>
+      <div className="space-y-1">
+        {entries.map((v, i) => (
+          <div key={i} className="flex gap-1">
+            <input
+              value={v}
+              onChange={(e) => {
+                const next = [...entries]
+                next[i] = e.target.value
+                onChange(next.filter(x => x.trim() || x === ''))
+              }}
+              onBlur={() => onChange(entries.map(x => x.trim()).filter(Boolean))}
+              placeholder={placeholder}
+              className="flex-1 px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+            />
+            {entries.length > 1 && (
+              <button
+                type="button"
+                onClick={() => onChange(entries.filter((_, j) => j !== i).map(x => x.trim()).filter(Boolean))}
+                className="px-2 text-grey-soft hover:text-red-500 transition-colors"
+                aria-label={`Remove ${label.toLowerCase()}`}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange([...entries.map(x => x.trim()).filter(Boolean), ''])}
+        className="mt-1 text-xs text-sage-primary hover:text-sage-primary/80 transition-colors"
+      >
+        + Add {label.toLowerCase()}
+      </button>
+    </div>
+  )
+}
+
 export default function GuestsPage() {
   const { session, logout } = useAuth()
   const [guests, setGuests] = useState<Guest[]>([])
@@ -53,7 +101,7 @@ export default function GuestsPage() {
     const optimistic: Guest = {
       id: `temp-${Date.now()}`,
       name: newName.trim(),
-      address: null, email: null, phone: null,
+      address: null, email: [], phone: [],
       party_size: 1,
       invitation_sent: false, rsvp_received: false,
       attending: null, meal: null, notes: null
@@ -171,18 +219,18 @@ export default function GuestsPage() {
                 <button onClick={() => deleteGuest(g.id)} className="text-grey-soft hover:text-red-500 transition-colors text-sm px-2">×</button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mb-3">
-                <input
-                  defaultValue={g.email || ''}
-                  onBlur={(e) => { if (e.target.value !== (g.email || '')) updateGuest(g.id, { email: e.target.value || null }) }}
-                  placeholder="Email"
-                  className="px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                <ContactList
+                  label="Email"
+                  values={g.email || []}
+                  onChange={(next) => updateGuest(g.id, { email: next })}
+                  placeholder="email@example.com"
                 />
-                <input
-                  defaultValue={g.phone || ''}
-                  onBlur={(e) => { if (e.target.value !== (g.phone || '')) updateGuest(g.id, { phone: e.target.value || null }) }}
-                  placeholder="Phone"
-                  className="px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+                <ContactList
+                  label="Phone"
+                  values={g.phone || []}
+                  onChange={(next) => updateGuest(g.id, { phone: next })}
+                  placeholder="555-555-5555"
                 />
               </div>
 

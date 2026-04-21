@@ -2,8 +2,8 @@ export interface Guest {
   id: string
   name: string
   address: string | null
-  email: string | null
-  phone: string | null
+  email: string[] | null
+  phone: string[] | null
   party_size: number
   invitation_sent: boolean
   rsvp_received: boolean
