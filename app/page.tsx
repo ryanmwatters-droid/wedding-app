@@ -12,6 +12,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [selectedPhases, setSelectedPhases] = useState<number[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([1]))
   const [completedPhases, setCompletedPhases] = useState<Set<number>>(new Set())
   const [sharedNote, setSharedNote] = useState('')
@@ -201,6 +202,7 @@ export default function Home() {
   }, {} as Record<number, Task[]>)
 
   const allCategories = Array.from(new Set(tasks.map(t => t.category)))
+  const allAssignees = Array.from(new Set(tasks.map(t => t.assigned_to || 'Unassigned')))
 
   return (
     <div className="min-h-screen bg-cream p-4">
@@ -277,20 +279,37 @@ export default function Home() {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={() => setSelectedCategories([])} 
+          <div className="flex flex-wrap gap-2 mb-4">
+            <button
+              onClick={() => setSelectedCategories([])}
               className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedCategories.length === 0 ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
             >
               All Categories
             </button>
             {allCategories.map(cat => (
-              <button 
-                key={cat} 
-                onClick={() => setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])} 
+              <button
+                key={cat}
+                onClick={() => setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])}
                 className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedCategories.includes(cat) ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
               >
                 {cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedAssignees([])}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.length === 0 ? 'bg-sage-muted text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+            >
+              All People
+            </button>
+            {allAssignees.map(person => (
+              <button
+                key={person}
+                onClick={() => setSelectedAssignees(prev => prev.includes(person) ? prev.filter(p => p !== person) : [...prev, person])}
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.includes(person) ? 'bg-sage-muted text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+              >
+                {person}
               </button>
             ))}
           </div>
@@ -298,7 +317,9 @@ export default function Home() {
 
         <div className="space-y-4">
           {phases.filter(p => selectedPhases.length === 0 || selectedPhases.includes(p)).map(phaseOrder => {
-            const phaseTasks = (tasksByPhase[phaseOrder] || []).filter(t => selectedCategories.length === 0 || selectedCategories.includes(t.category))
+            const phaseTasks = (tasksByPhase[phaseOrder] || [])
+              .filter(t => selectedCategories.length === 0 || selectedCategories.includes(t.category))
+              .filter(t => selectedAssignees.length === 0 || selectedAssignees.includes(t.assigned_to || 'Unassigned'))
             if (phaseTasks.length === 0) return null
             const phaseCompleted = phaseTasks.filter(t => t.completed).length
             const phaseTotal = phaseTasks.length
