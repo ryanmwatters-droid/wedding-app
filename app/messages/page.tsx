@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Message } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
+import { PEOPLE_NAMES } from '@/lib/people'
 
 function senderInfo(email: string | null | undefined): { name: string; bubble: string } {
   const local = (email || '').toLowerCase().split('@')[0]
@@ -21,7 +22,16 @@ export default function MessagesPage() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [notifyTargets, setNotifyTargets] = useState<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const myName = senderInfo(session?.user.email).name
+  const otherPeople = PEOPLE_NAMES.filter(n => n !== myName)
+
+  useEffect(() => {
+    setNotifyTargets(new Set(otherPeople))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id])
 
   useEffect(() => {
     if (!session) return
@@ -81,6 +91,15 @@ export default function MessagesPage() {
         .single()
       if (error) throw error
       setMessages(prev => prev.map(m => m.id === optimistic.id ? data as Message : m))
+
+      const recipients = Array.from(notifyTargets)
+      if (recipients.length > 0) {
+        fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderName: myName, text: draft, recipients })
+        }).catch(err => console.error('Notify failed:', err))
+      }
     } catch (err) {
       console.error('Error sending message:', err)
       setError('Failed to send.')
@@ -156,20 +175,42 @@ export default function MessagesPage() {
           )}
         </div>
 
-        <form onSubmit={send} className="flex gap-2">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 px-4 py-3 bg-white border border-grey-soft/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
-          />
-          <button
-            type="submit"
-            disabled={!text.trim()}
-            className="px-5 py-3 bg-sage-primary text-white rounded-xl hover:bg-sage-primary/90 disabled:opacity-50 transition-colors"
-          >
-            Send
-          </button>
+        <form onSubmit={send} className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 px-4 py-3 bg-white border border-grey-soft/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
+            />
+            <button
+              type="submit"
+              disabled={!text.trim()}
+              className="px-5 py-3 bg-sage-primary text-white rounded-xl hover:bg-sage-primary/90 disabled:opacity-50 transition-colors"
+            >
+              Send
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-grey-soft px-1">
+            <span>Email:</span>
+            {otherPeople.map(name => {
+              const on = notifyTargets.has(name)
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => setNotifyTargets(prev => {
+                    const next = new Set(prev)
+                    if (on) next.delete(name); else next.add(name)
+                    return next
+                  })}
+                  className={`px-2 py-0.5 rounded-full transition-colors ${on ? 'bg-rose-accent/20 text-rose-accent border border-rose-accent/40' : 'bg-grey-soft/10 text-grey-soft border border-transparent'}`}
+                >
+                  {on ? '✓ ' : ''}{name}
+                </button>
+              )
+            })}
+          </div>
         </form>
       </div>
     </div>
