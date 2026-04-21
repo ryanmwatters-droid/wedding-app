@@ -202,7 +202,7 @@ export default function Home() {
   }, {} as Record<number, Task[]>)
 
   const allCategories = Array.from(new Set(tasks.map(t => t.category)))
-  const allAssignees = Array.from(new Set(tasks.map(t => t.assigned_to || 'Unassigned')))
+  const allAssignees = ['Unassigned', 'Anybody', 'Ryan', 'Hannah', 'Sue']
 
   return (
     <div className="min-h-screen bg-cream p-4">
@@ -299,7 +299,7 @@ export default function Home() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedAssignees([])}
-              className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.length === 0 ? 'bg-sage-muted text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.length === 0 ? 'bg-dusty-blue text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
             >
               All People
             </button>
@@ -307,7 +307,7 @@ export default function Home() {
               <button
                 key={person}
                 onClick={() => setSelectedAssignees(prev => prev.includes(person) ? prev.filter(p => p !== person) : [...prev, person])}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.includes(person) ? 'bg-sage-muted text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.includes(person) ? 'bg-dusty-blue text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
               >
                 {person}
               </button>
