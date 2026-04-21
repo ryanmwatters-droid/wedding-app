@@ -110,19 +110,20 @@ export default function Home() {
   }
 
   const updateTask = async (id: string, completed: boolean) => {
+    const completed_at = completed ? new Date().toISOString() : null
+    const completed_by = completed ? session?.user.id ?? null : null
+    setTasks(prev => {
+      const next = prev.map(t => t.id === id ? { ...t, completed, completed_at, completed_by } : t)
+      checkPhaseCompletion(next)
+      return next
+    })
+    if ('vibrate' in navigator) navigator.vibrate(50)
     try {
       const { error } = await supabase
         .from('tasks')
-        .update({
-          completed,
-          completed_by: completed ? session?.user.id : null,
-          completed_at: completed ? new Date().toISOString() : null
-        })
+        .update({ completed, completed_by, completed_at })
         .eq('id', id)
       if (error) throw error
-      
-      // Haptic feedback
-      if ('vibrate' in navigator) navigator.vibrate(50)
     } catch (err) {
       console.error('Error updating task:', err)
       setError('Failed to update task. Please try again.')
@@ -130,6 +131,7 @@ export default function Home() {
   }
 
   const updateDecision = async (id: string, decision: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, decision } : t))
     try {
       const { error } = await supabase.from('tasks').update({ decision }).eq('id', id)
       if (error) throw error
@@ -140,6 +142,7 @@ export default function Home() {
   }
 
   const updateAssignment = async (id: string, assigned_to: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, assigned_to } : t))
     try {
       const { error } = await supabase.from('tasks').update({ assigned_to }).eq('id', id)
       if (error) throw error
