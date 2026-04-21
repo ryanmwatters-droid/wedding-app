@@ -129,6 +129,16 @@ export default function Home() {
     }
   }
 
+  const updateDecision = async (id: string, decision: string) => {
+    try {
+      const { error } = await supabase.from('tasks').update({ decision }).eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Error saving decision:', err)
+      setError('Failed to save. Please try again.')
+    }
+  }
+
   const updateSharedNote = async (text: string) => {
     if (!noteId) return
     try {
@@ -295,11 +305,11 @@ export default function Home() {
                   <div className="px-4 pb-4 space-y-2">
                     {phaseTasks.map(task => (
                       <div key={task.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-cream/50 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={task.completed} 
-                          onChange={(e) => updateTask(task.id, e.target.checked)} 
-                          className="mt-1" 
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={(e) => updateTask(task.id, e.target.checked)}
+                          className="mt-1"
                         />
                         <div className="flex-1">
                           <div className={`text-charcoal transition-all duration-300 ${task.completed ? 'line-through opacity-60' : ''}`}>{task.text}</div>
@@ -307,6 +317,17 @@ export default function Home() {
                             <span className="px-2 py-1 bg-sage-muted text-charcoal text-xs rounded-full">{task.category}</span>
                             {task.notes && <span className="text-grey-soft italic text-sm">{task.notes}</span>}
                           </div>
+                          <textarea
+                            defaultValue={task.decision || ''}
+                            onBlur={(e) => {
+                              if (e.target.value !== (task.decision || '')) {
+                                updateDecision(task.id, e.target.value)
+                              }
+                            }}
+                            placeholder="What we decided…"
+                            className="mt-2 w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 focus:border-sage-primary placeholder:text-grey-soft/60"
+                            rows={1}
+                          />
                           {task.completed && task.completed_at && (
                             <div className="text-xs text-grey-soft mt-1">Completed {new Date(task.completed_at).toLocaleDateString()}</div>
                           )}
