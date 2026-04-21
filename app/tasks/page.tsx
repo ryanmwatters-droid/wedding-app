@@ -3,113 +3,50 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
-import { Task } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
-import confetti from 'canvas-confetti'
+import { PHASES } from '@/lib/phases'
 
-export default function TasksPage() {
+type PhaseStat = { total: number; completed: number }
+
+export default function TasksOverview() {
   const { session, logout } = useAuth()
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [selectedPhases, setSelectedPhases] = useState<number[]>([])
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([])
-  const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([1]))
-  const [completedPhases, setCompletedPhases] = useState<Set<number>>(new Set())
+  const [stats, setStats] = useState<Record<number, PhaseStat>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (!session) return
 
-    const fetchTasks = async () => {
+    const fetchStats = async () => {
       try {
-        const { data, error } = await supabase
-          .from('tasks')
-          .select('*')
-          .order('phase_order')
-          .order('task_order')
+        const { data, error } = await supabase.from('tasks').select('phase_order, completed')
         if (error) throw error
-        setTasks(data || [])
+        const next: Record<number, PhaseStat> = {}
+        for (const t of data || []) {
+          if (!next[t.phase_order]) next[t.phase_order] = { total: 0, completed: 0 }
+          next[t.phase_order].total++
+          if (t.completed) next[t.phase_order].completed++
+        }
+        setStats(next)
       } catch (err) {
-        console.error('Error fetching tasks:', err)
-        setError('Failed to load tasks. Please refresh the page.')
+        console.error('Error fetching task stats:', err)
+        setError('Failed to load tasks.')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchTasks()
+    fetchStats()
 
     const channel = supabase
-      .channel('tasks-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, (payload) => {
-        if (payload.eventType === 'UPDATE') {
-          setTasks(prev => {
-            const newTasks = prev.map(t => t.id === payload.new.id ? payload.new as Task : t)
-            checkPhaseCompletion(newTasks)
-            return newTasks
-          })
-        }
-      })
+      .channel('tasks-overview')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, fetchStats)
       .subscribe()
 
     return () => { channel.unsubscribe() }
   }, [session])
 
-  const checkPhaseCompletion = (currentTasks: Task[]) => {
-    const phases = Array.from(new Set(currentTasks.map(t => t.phase_order)))
-    phases.forEach(phaseOrder => {
-      const phaseTasks = currentTasks.filter(t => t.phase_order === phaseOrder)
-      const allCompleted = phaseTasks.every(t => t.completed)
-      if (allCompleted && !completedPhases.has(phaseOrder)) {
-        setCompletedPhases(prev => new Set([...prev, phaseOrder]))
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } })
-      }
-    })
-  }
-
-  const updateTask = async (id: string, completed: boolean) => {
-    const completed_at = completed ? new Date().toISOString() : null
-    const completed_by = completed ? session?.user.id ?? null : null
-    setTasks(prev => {
-      const next = prev.map(t => t.id === id ? { ...t, completed, completed_at, completed_by } : t)
-      checkPhaseCompletion(next)
-      return next
-    })
-    if ('vibrate' in navigator) navigator.vibrate(50)
-    try {
-      const { error } = await supabase.from('tasks').update({ completed, completed_by, completed_at }).eq('id', id)
-      if (error) throw error
-    } catch (err) {
-      console.error('Error updating task:', err)
-      setError('Failed to update task.')
-    }
-  }
-
-  const updateDecision = async (id: string, decision: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, decision } : t))
-    try {
-      const { error } = await supabase.from('tasks').update({ decision }).eq('id', id)
-      if (error) throw error
-    } catch (err) {
-      console.error('Error saving decision:', err)
-      setError('Failed to save.')
-    }
-  }
-
-  const updateAssignment = async (id: string, assigned_to: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, assigned_to } : t))
-    try {
-      const { error } = await supabase.from('tasks').update({ assigned_to }).eq('id', id)
-      if (error) throw error
-    } catch (err) {
-      console.error('Error saving assignment:', err)
-      setError('Failed to save.')
-    }
-  }
-
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
-
   if (loading) return (
     <div className="min-h-screen bg-cream flex items-center justify-center">
       <div className="text-center">
@@ -119,19 +56,9 @@ export default function TasksPage() {
     </div>
   )
 
-  const totalTasks = tasks.length
-  const completedTasks = tasks.filter(t => t.completed).length
-  const remainingTasks = totalTasks - completedTasks
-  const percentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-
-  const phases = Array.from(new Set(tasks.map(t => t.phase_order))).sort()
-  const tasksByPhase = phases.reduce((acc, phaseOrder) => {
-    acc[phaseOrder] = tasks.filter(t => t.phase_order === phaseOrder)
-    return acc
-  }, {} as Record<number, Task[]>)
-
-  const allCategories = Array.from(new Set(tasks.map(t => t.category)))
-  const allAssignees = ['Unassigned', 'Anybody', 'Ryan', 'Hannah', 'Sue']
+  const totalTasks = Object.values(stats).reduce((s, p) => s + p.total, 0)
+  const completedTotal = Object.values(stats).reduce((s, p) => s + p.completed, 0)
+  const overallPct = totalTasks > 0 ? Math.round((completedTotal / totalTasks) * 100) : 0
 
   return (
     <div className="min-h-screen bg-cream p-4">
@@ -143,98 +70,48 @@ export default function TasksPage() {
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6">
-            {error}
-            <button onClick={() => setError('')} className="float-right ml-2 text-red-500 hover:text-red-700">×</button>
-          </div>
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>
         )}
 
         <div className="bg-white rounded-2xl p-6 mb-6 border border-grey-soft/20">
-          <h2 className="text-lg font-medium text-charcoal mb-4">Progress</h2>
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-sage-primary">{completedTasks}</div>
-              <div className="text-sm text-grey-soft">Completed</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-charcoal">{remainingTasks}</div>
-              <div className="text-sm text-grey-soft">Remaining</div>
-            </div>
+          <div className="flex justify-between items-baseline mb-3">
+            <h2 className="text-lg font-medium text-charcoal">Overall Progress</h2>
+            <span className="text-sm text-grey-soft">{completedTotal} of {totalTasks}</span>
           </div>
-          <div className="mt-4">
-            <div className="w-full bg-grey-soft/20 rounded-full h-2">
-              <div className="bg-sage-primary h-2 rounded-full transition-all duration-300" style={{ width: `${percentage}%` }}></div>
-            </div>
-            <div className="text-center text-sm text-grey-soft mt-2">{percentage}% Complete</div>
+          <div className="w-full bg-grey-soft/20 rounded-full h-2">
+            <div className="bg-sage-primary h-2 rounded-full transition-all duration-500" style={{ width: `${overallPct}%` }}></div>
           </div>
+          <div className="text-center text-sm text-grey-soft mt-2">{overallPct}% complete</div>
         </div>
 
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button onClick={() => setSelectedPhases([])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedPhases.length === 0 ? 'bg-sage-primary text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>All Phases</button>
-            {phases.map(phase => (
-              <button key={phase} onClick={() => setSelectedPhases(prev => prev.includes(phase) ? prev.filter(p => p !== phase) : [...prev, phase])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedPhases.includes(phase) ? 'bg-sage-primary text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>Phase {phase}</button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button onClick={() => setSelectedCategories([])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedCategories.length === 0 ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>All Categories</button>
-            {allCategories.map(cat => (
-              <button key={cat} onClick={() => setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedCategories.includes(cat) ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>{cat}</button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setSelectedAssignees([])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.length === 0 ? 'bg-dusty-blue text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>All People</button>
-            {allAssignees.map(person => (
-              <button key={person} onClick={() => setSelectedAssignees(prev => prev.includes(person) ? prev.filter(p => p !== person) : [...prev, person])} className={`px-3 py-1 rounded-full text-sm transition-colors ${selectedAssignees.includes(person) ? 'bg-dusty-blue text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>{person}</button>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {phases.filter(p => selectedPhases.length === 0 || selectedPhases.includes(p)).map(phaseOrder => {
-            const phaseTasks = (tasksByPhase[phaseOrder] || [])
-              .filter(t => selectedCategories.length === 0 || selectedCategories.includes(t.category))
-              .filter(t => selectedAssignees.length === 0 || selectedAssignees.includes(t.assigned_to || 'Unassigned'))
-            if (phaseTasks.length === 0) return null
-            const phaseCompleted = phaseTasks.filter(t => t.completed).length
-            const phaseTotal = phaseTasks.length
-            const isExpanded = expandedPhases.has(phaseOrder)
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {PHASES.map(phase => {
+            const stat = stats[phase.order] || { total: 0, completed: 0 }
+            const pct = stat.total > 0 ? Math.round((stat.completed / stat.total) * 100) : 0
+            const isDone = stat.total > 0 && stat.completed === stat.total
             return (
-              <div key={phaseOrder} className="bg-white rounded-2xl border border-grey-soft/20">
-                <button onClick={() => setExpandedPhases(prev => new Set(prev.has(phaseOrder) ? [...prev].filter(p => p !== phaseOrder) : [...prev, phaseOrder]))} className="w-full p-4 text-left hover:bg-cream/30 transition-colors">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-charcoal">{phaseTasks[0]?.phase || `Phase ${phaseOrder}`}</h3>
-                    <div className="text-sm text-grey-soft">{phaseCompleted}/{phaseTotal}</div>
-                  </div>
-                </button>
-                {isExpanded && (
-                  <div className="px-4 pb-4 space-y-2">
-                    {phaseTasks.map(task => (
-                      <div key={task.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-cream/50 transition-colors">
-                        <input type="checkbox" checked={task.completed} onChange={(e) => updateTask(task.id, e.target.checked)} className="mt-1" />
-                        <div className="flex-1">
-                          <div className={`text-charcoal transition-all duration-300 ${task.completed ? 'line-through opacity-60' : ''}`}>{task.text}</div>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="px-2 py-1 bg-sage-muted text-charcoal text-xs rounded-full">{task.category}</span>
-                            <select value={task.assigned_to || 'Unassigned'} onChange={(e) => updateAssignment(task.id, e.target.value)} className="px-2 py-1 text-xs rounded-full border border-rose-accent/40 bg-rose-accent/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-rose-accent/40">
-                              <option value="Unassigned">Unassigned</option>
-                              <option value="Anybody">Anybody</option>
-                              <option value="Ryan">Ryan</option>
-                              <option value="Hannah">Hannah</option>
-                              <option value="Sue">Sue</option>
-                            </select>
-                            {task.notes && <span className="text-grey-soft italic text-sm">{task.notes}</span>}
-                          </div>
-                          <textarea defaultValue={task.decision || ''} onBlur={(e) => { if (e.target.value !== (task.decision || '')) updateDecision(task.id, e.target.value) }} placeholder="What we decided…" className="mt-2 w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 focus:border-sage-primary placeholder:text-grey-soft/60" rows={1} />
-                          {task.completed && task.completed_at && (
-                            <div className="text-xs text-grey-soft mt-1">Completed {new Date(task.completed_at).toLocaleDateString()}</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <Link
+                key={phase.order}
+                href={`/tasks/${phase.order}`}
+                className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs uppercase tracking-wider text-grey-soft">Phase {phase.order}</span>
+                  {isDone && <span className="text-sage-primary text-sm">✓</span>}
+                </div>
+                <h3 className="text-xl font-serif text-charcoal mb-1">{phase.shortName}</h3>
+                <p className="text-xs text-grey-soft italic mb-4">{phase.window}</p>
+                <div className="w-full bg-grey-soft/15 rounded-full h-1.5 mb-2">
+                  <div
+                    className={`h-1.5 rounded-full transition-all duration-500 ${isDone ? 'bg-sage-primary' : 'bg-sage-muted'}`}
+                    style={{ width: `${pct}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-xs text-grey-soft">
+                  <span>{stat.completed} of {stat.total}</span>
+                  <span>{pct}%</span>
+                </div>
+              </Link>
             )
           })}
         </div>
