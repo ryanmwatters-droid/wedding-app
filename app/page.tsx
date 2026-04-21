@@ -329,10 +329,11 @@ export default function Home() {
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="px-2 py-1 bg-sage-muted text-charcoal text-xs rounded-full">{task.category}</span>
                             <select
-                              value={task.assigned_to || 'Anybody'}
+                              value={task.assigned_to || 'Unassigned'}
                               onChange={(e) => updateAssignment(task.id, e.target.value)}
                               className="px-2 py-1 text-xs rounded-full border border-rose-accent/40 bg-rose-accent/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-rose-accent/40"
                             >
+                              <option value="Unassigned">Unassigned</option>
                               <option value="Anybody">Anybody</option>
                               <option value="Ryan">Ryan</option>
                               <option value="Hannah">Hannah</option>
