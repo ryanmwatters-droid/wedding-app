@@ -139,6 +139,16 @@ export default function Home() {
     }
   }
 
+  const updateAssignment = async (id: string, assigned_to: string) => {
+    try {
+      const { error } = await supabase.from('tasks').update({ assigned_to }).eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Error saving assignment:', err)
+      setError('Failed to save. Please try again.')
+    }
+  }
+
   const updateSharedNote = async (text: string) => {
     if (!noteId) return
     try {
@@ -313,8 +323,18 @@ export default function Home() {
                         />
                         <div className="flex-1">
                           <div className={`text-charcoal transition-all duration-300 ${task.completed ? 'line-through opacity-60' : ''}`}>{task.text}</div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="px-2 py-1 bg-sage-muted text-charcoal text-xs rounded-full">{task.category}</span>
+                            <select
+                              value={task.assigned_to || 'Anybody'}
+                              onChange={(e) => updateAssignment(task.id, e.target.value)}
+                              className="px-2 py-1 text-xs rounded-full border border-rose-accent/40 bg-rose-accent/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-rose-accent/40"
+                            >
+                              <option value="Anybody">Anybody</option>
+                              <option value="Ryan">Ryan</option>
+                              <option value="Hannah">Hannah</option>
+                              <option value="Sue">Sue</option>
+                            </select>
                             {task.notes && <span className="text-grey-soft italic text-sm">{task.notes}</span>}
                           </div>
                           <textarea

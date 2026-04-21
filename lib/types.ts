@@ -7,6 +7,7 @@ export interface Task {
   category: string
   notes: string | null
   decision: string | null
+  assigned_to: string | null
   completed: boolean
   completed_by: string | null
   completed_at: string | null
