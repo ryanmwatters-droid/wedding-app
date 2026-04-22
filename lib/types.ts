@@ -1,3 +1,39 @@
+export type VendorStatus = 'Lead' | 'Contacted' | 'Quoted' | 'Meeting Scheduled' | 'Booked' | 'Declined' | 'Not a Fit'
+
+export const VENDOR_STATUSES: VendorStatus[] = ['Lead', 'Contacted', 'Quoted', 'Meeting Scheduled', 'Booked', 'Declined', 'Not a Fit']
+
+export interface VendorCategory {
+  id: string
+  name: string
+  sort_order: number
+  created_at: string
+}
+
+export interface Vendor {
+  id: string
+  category_id: string
+  business_name: string
+  contact_name: string | null
+  email: string[] | null
+  phone: string[] | null
+  website: string | null
+  instagram: string | null
+  status: VendorStatus
+  estimated_cost: number | null
+  quoted_cost: number | null
+  deposit_paid: number | null
+  first_contact_date: string | null
+  last_contact_date: string | null
+  next_action_date: string | null
+  next_action: string | null
+  recommended_by: string | null
+  rating: number | null
+  pros: string | null
+  cons: string | null
+  notes: string | null
+  created_at: string
+}
+
 export interface BudgetSettings {
   id: string
   total_budget: number

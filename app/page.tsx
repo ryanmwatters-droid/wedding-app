@@ -12,6 +12,7 @@ export default function HomePage() {
   const [engagementStats, setEngagementStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
   const [docCount, setDocCount] = useState(0)
   const [budget, setBudget] = useState({ allocated: 0, spent: 0 })
+  const [vendorStats, setVendorStats] = useState({ total: 0, booked: 0 })
   const [latestMessage, setLatestMessage] = useState<{ text: string; user_email: string | null } | null>(null)
   const [error, setError] = useState('')
 
@@ -19,15 +20,23 @@ export default function HomePage() {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetSettingsRes, budgetItemRes] = await Promise.all([
+      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetSettingsRes, budgetItemRes, vendorsRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('engagement_guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('messages').select('text, user_email').order('created_at', { ascending: false }).limit(1),
         supabase.from('documents').select('id', { count: 'exact', head: true }),
         supabase.from('budget_settings').select('total_budget').limit(1).single(),
-        supabase.from('budget_items').select('actual')
+        supabase.from('budget_items').select('actual'),
+        supabase.from('vendors').select('status')
       ])
+
+      if (vendorsRes.data) {
+        setVendorStats({
+          total: vendorsRes.data.length,
+          booked: vendorsRes.data.filter(v => v.status === 'Booked').length
+        })
+      }
 
       if (budgetItemRes.data) {
         setBudget({
@@ -132,6 +141,14 @@ export default function HomePage() {
               <div className={`h-2 rounded-full transition-all duration-300 ${budget.spent > budget.allocated && budget.allocated > 0 ? 'bg-rose-accent' : 'bg-sage-primary'}`} style={{ width: `${budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0}%` }}></div>
             </div>
             <p className="text-sm text-grey-soft">{budget.allocated > 0 ? `${Math.round((budget.spent / budget.allocated) * 100)}% of budget · view breakdown →` : 'Set up your budget →'}</p>
+          </Link>
+
+          <Link href="/vendors" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
+            <div className="flex justify-between items-start mb-3">
+              <h2 className="text-xl font-serif text-charcoal">Vendors</h2>
+              <span className="text-sm text-grey-soft">{vendorStats.total} {vendorStats.total === 1 ? 'lead' : 'leads'}</span>
+            </div>
+            <p className="text-sm text-grey-soft">{vendorStats.booked} booked · view all categories →</p>
           </Link>
 
           <Link href="/documents" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-dusty-blue/40 transition-colors">
