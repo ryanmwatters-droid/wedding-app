@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
+import { VENDOR_TO_BUDGET_CATEGORY } from '@/lib/vendor-budget-map'
 
 const statusColor = (s: VendorStatus): string => {
   switch (s) {
@@ -74,12 +75,15 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (n: n
   )
 }
 
-function VendorDetail({ vendor, onUpdate, onDelete, onClose }: {
+function VendorDetail({ vendor, categoryName, onUpdate, onDelete, onUnlinkBudget, onClose }: {
   vendor: Vendor
+  categoryName: string
   onUpdate: (id: string, updates: Partial<Vendor>) => void
   onDelete: (id: string) => void
+  onUnlinkBudget: (id: string) => void
   onClose: () => void
 }) {
+  const mappedBudgetCategory = VENDOR_TO_BUDGET_CATEGORY[categoryName]
   return (
     <div className="p-4">
       <div className="flex justify-between items-start gap-2 mb-4">
@@ -268,7 +272,25 @@ function VendorDetail({ vendor, onUpdate, onDelete, onClose }: {
         />
       </div>
 
-      <button onClick={() => { onDelete(vendor.id); onClose() }} className="text-xs text-grey-soft hover:text-red-500 transition-colors">Delete vendor</button>
+      <div className="flex items-center justify-between pt-3 border-t border-grey-soft/15">
+        <div className="text-xs text-grey-soft">
+          {vendor.budget_item_id ? (
+            <span className="text-sage-primary">✓ Linked to Budget {mappedBudgetCategory ? `· ${mappedBudgetCategory}` : ''}</span>
+          ) : vendor.status === 'Booked' && !mappedBudgetCategory ? (
+            <span>No matching budget category</span>
+          ) : vendor.status === 'Booked' ? (
+            <span>Will link to Budget on save</span>
+          ) : (
+            <span className="text-grey-soft/60">Budget sync when booked</span>
+          )}
+        </div>
+        <div className="flex gap-3">
+          {vendor.budget_item_id && (
+            <button onClick={() => onUnlinkBudget(vendor.id)} className="text-xs text-grey-soft hover:text-charcoal transition-colors">Unlink</button>
+          )}
+          <button onClick={() => { onDelete(vendor.id); onClose() }} className="text-xs text-grey-soft hover:text-red-500 transition-colors">Delete</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -322,14 +344,67 @@ export default function VendorCategoryDetail() {
     return () => window.removeEventListener('keydown', handleEsc)
   }, [])
 
+  const syncToBudget = async (next: Vendor) => {
+    if (!category) return
+    const budgetCategoryName = VENDOR_TO_BUDGET_CATEGORY[category.name]
+    if (!budgetCategoryName) return
+
+    const cost = next.quoted_cost ?? next.estimated_cost ?? 0
+
+    if (next.budget_item_id) {
+      await supabase.from('budget_items').update({
+        name: next.business_name,
+        actual: cost
+      }).eq('id', next.budget_item_id)
+      return
+    }
+
+    const { data: budgetCat } = await supabase
+      .from('budget_categories')
+      .select('id')
+      .eq('name', budgetCategoryName)
+      .single()
+    if (!budgetCat) return
+
+    const { data: newItem } = await supabase
+      .from('budget_items')
+      .insert({ category_id: budgetCat.id, name: next.business_name, actual: cost })
+      .select()
+      .single()
+    if (!newItem) return
+
+    await supabase.from('vendors').update({ budget_item_id: newItem.id }).eq('id', next.id)
+    setVendors(prev => prev.map(v => v.id === next.id ? { ...v, budget_item_id: newItem.id } : v))
+  }
+
   const updateVendor = async (id: string, updates: Partial<Vendor>) => {
-    setVendors(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v))
+    const current = vendors.find(v => v.id === id)
+    if (!current) return
+    const next = { ...current, ...updates }
+    setVendors(prev => prev.map(v => v.id === id ? next : v))
     try {
       const { error } = await supabase.from('vendors').update(updates).eq('id', id)
       if (error) throw error
+
+      const becameBooked = updates.status === 'Booked' && current.status !== 'Booked'
+      const relevantFieldChanged = 'quoted_cost' in updates || 'business_name' in updates || 'estimated_cost' in updates
+      if (becameBooked || (next.budget_item_id && relevantFieldChanged)) {
+        await syncToBudget(next)
+      }
     } catch (err) {
       console.error('Update failed:', err)
       setError('Failed to save.')
+    }
+  }
+
+  const unlinkBudget = async (id: string) => {
+    setVendors(prev => prev.map(v => v.id === id ? { ...v, budget_item_id: null } : v))
+    try {
+      const { error } = await supabase.from('vendors').update({ budget_item_id: null }).eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Unlink failed:', err)
+      setError('Failed to unlink.')
     }
   }
 
@@ -423,7 +498,7 @@ export default function VendorCategoryDetail() {
       {selected && (
         <div className="fixed inset-0 z-50 bg-charcoal/40 flex items-end sm:items-center justify-center" onClick={() => setSelectedId(null)}>
           <div className="bg-white w-full sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <VendorDetail vendor={selected} onUpdate={updateVendor} onDelete={deleteVendor} onClose={() => setSelectedId(null)} />
+            <VendorDetail vendor={selected} categoryName={category.name} onUpdate={updateVendor} onDelete={deleteVendor} onUnlinkBudget={unlinkBudget} onClose={() => setSelectedId(null)} />
           </div>
         </div>
       )}

@@ -31,6 +31,7 @@ export interface Vendor {
   pros: string | null
   cons: string | null
   notes: string | null
+  budget_item_id: string | null
   created_at: string
 }
 
