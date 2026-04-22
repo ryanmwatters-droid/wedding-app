@@ -1,3 +1,9 @@
+export interface BudgetSettings {
+  id: string
+  total_budget: number
+  updated_at: string
+}
+
 export interface BudgetCategory {
   id: string
   name: string

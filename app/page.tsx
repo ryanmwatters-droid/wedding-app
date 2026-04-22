@@ -19,19 +19,19 @@ export default function HomePage() {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetCatRes, budgetItemRes] = await Promise.all([
+      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetSettingsRes, budgetItemRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('engagement_guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('messages').select('text, user_email').order('created_at', { ascending: false }).limit(1),
         supabase.from('documents').select('id', { count: 'exact', head: true }),
-        supabase.from('budget_categories').select('allocated'),
+        supabase.from('budget_settings').select('total_budget').limit(1).single(),
         supabase.from('budget_items').select('actual')
       ])
 
-      if (budgetCatRes.data && budgetItemRes.data) {
+      if (budgetItemRes.data) {
         setBudget({
-          allocated: budgetCatRes.data.reduce((s, c) => s + (Number(c.allocated) || 0), 0),
+          allocated: Number(budgetSettingsRes.data?.total_budget) || 0,
           spent: budgetItemRes.data.reduce((s, i) => s + (Number(i.actual) || 0), 0)
         })
       }

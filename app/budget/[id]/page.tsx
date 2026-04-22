@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { BudgetCategory, BudgetItem } from '@/lib/types'
+import { BudgetCategory, BudgetItem, BudgetSettings } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`
@@ -15,6 +15,7 @@ export default function BudgetCategoryDetail() {
   const { session, logout } = useAuth()
   const [category, setCategory] = useState<BudgetCategory | null>(null)
   const [items, setItems] = useState<BudgetItem[]>([])
+  const [settings, setSettings] = useState<BudgetSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [newItemName, setNewItemName] = useState('')
@@ -24,14 +25,16 @@ export default function BudgetCategoryDetail() {
 
     const fetchAll = async () => {
       try {
-        const [catRes, itemRes] = await Promise.all([
+        const [catRes, itemRes, settingsRes] = await Promise.all([
           supabase.from('budget_categories').select('*').eq('id', params.id).single(),
-          supabase.from('budget_items').select('*').eq('category_id', params.id).order('created_at')
+          supabase.from('budget_items').select('*').eq('category_id', params.id).order('created_at'),
+          supabase.from('budget_settings').select('*').limit(1).single()
         ])
         if (catRes.error) throw catRes.error
         if (itemRes.error) throw itemRes.error
         setCategory(catRes.data)
         setItems(itemRes.data || [])
+        if (settingsRes.data) setSettings(settingsRes.data)
       } catch (err) {
         console.error('Error fetching:', err)
         setError('Failed to load category.')
@@ -110,11 +113,13 @@ export default function BudgetCategoryDetail() {
     </div>
   )
 
-  const spent = items.reduce((s, i) => s + (i.actual || 0), 0)
-  const estimated = items.reduce((s, i) => s + (i.estimated || 0), 0)
-  const allocated = category.allocated || 0
+  const spent = items.reduce((s, i) => s + (Number(i.actual) || 0), 0)
+  const estimated = items.reduce((s, i) => s + (Number(i.estimated) || 0), 0)
+  const allocated = Number(category.allocated) || 0
   const pct = allocated > 0 ? Math.min(100, Math.round((spent / allocated) * 100)) : 0
   const over = spent > allocated && allocated > 0
+  const totalBudget = Number(settings?.total_budget) || 0
+  const allocPct = totalBudget > 0 ? (allocated / totalBudget) * 100 : 0
 
   return (
     <div className="min-h-screen bg-cream p-4">
@@ -137,20 +142,42 @@ export default function BudgetCategoryDetail() {
             onBlur={(e) => { if (e.target.value.trim() && e.target.value !== category.name) updateCategory({ name: e.target.value.trim() }) }}
             className="text-3xl font-serif text-charcoal bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none w-full mb-3"
           />
-          <div className="flex items-center gap-2 mb-2 text-sm">
-            <span className="text-grey-soft">Allocated: $</span>
-            <input
-              type="number"
-              min={0}
-              step={100}
-              defaultValue={allocated || ''}
-              onBlur={(e) => {
-                const v = parseFloat(e.target.value) || 0
-                if (v !== allocated) updateCategory({ allocated: v })
-              }}
-              placeholder="0"
-              className="w-32 px-2 py-1 bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
-            />
+          <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
+            <div className="flex items-center gap-1">
+              <span className="text-grey-soft">Allocated: $</span>
+              <input
+                key={`dol-${allocated}`}
+                type="number"
+                min={0}
+                step={100}
+                defaultValue={allocated || ''}
+                onBlur={(e) => {
+                  const v = parseFloat(e.target.value) || 0
+                  if (v !== allocated) updateCategory({ allocated: v })
+                }}
+                placeholder="0"
+                className="w-28 px-2 py-1 bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                key={`pct-${allocPct.toFixed(1)}`}
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                disabled={totalBudget === 0}
+                defaultValue={allocPct > 0 ? allocPct.toFixed(allocPct < 10 ? 1 : 0) : ''}
+                onBlur={(e) => {
+                  const p = parseFloat(e.target.value) || 0
+                  const newDollar = (p / 100) * totalBudget
+                  if (newDollar !== allocated) updateCategory({ allocated: newDollar })
+                }}
+                placeholder={totalBudget === 0 ? '—' : '0'}
+                className="w-16 px-2 py-1 bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30 disabled:opacity-40"
+              />
+              <span className="text-grey-soft">% of total</span>
+            </div>
           </div>
           <div className="w-full bg-grey-soft/20 rounded-full h-2 mt-2">
             <div className={`h-2 rounded-full transition-all duration-500 ${over ? 'bg-rose-accent' : 'bg-sage-primary'}`} style={{ width: `${pct}%` }}></div>
