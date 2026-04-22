@@ -5,6 +5,38 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 
+const ENGAGEMENT_PARTY = new Date('2026-06-20T18:30:00-05:00')
+
+function CountdownBanner() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const ms = ENGAGEMENT_PARTY.getTime() - now.getTime()
+  const past = ms <= 0
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
+
+  let big: string
+  if (past) big = '✿'
+  else if (days >= 1) big = `${days} ${days === 1 ? 'day' : 'days'}`
+  else big = `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+
+  return (
+    <div className="bg-rose-accent/10 border border-rose-accent/20 rounded-2xl p-4 mb-4 text-center">
+      <div className="text-2xl font-serif text-rose-accent">
+        {past ? 'Engagement Party — today!' : big}
+      </div>
+      <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
+        {past ? 'June 20 · 6:30 PM Central' : 'until our engagement party · June 20 · 6:30 PM CT'}
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const { session, logout } = useAuth()
   const [taskStats, setTaskStats] = useState({ total: 0, completed: 0 })
@@ -106,6 +138,8 @@ export default function HomePage() {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>
         )}
+
+        <CountdownBanner />
 
         <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-4 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
           <div className="flex justify-between items-start gap-3">
