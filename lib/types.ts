@@ -1,3 +1,15 @@
+export interface Document {
+  id: string
+  storage_path: string
+  display_name: string
+  description: string | null
+  uploaded_by: string | null
+  uploaded_by_email: string | null
+  size_bytes: number | null
+  mime_type: string | null
+  created_at: string
+}
+
 export interface Message {
   id: string
   user_id: string
