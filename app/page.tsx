@@ -11,6 +11,7 @@ export default function HomePage() {
   const [guestStats, setGuestStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
   const [engagementStats, setEngagementStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
   const [docCount, setDocCount] = useState(0)
+  const [budget, setBudget] = useState({ allocated: 0, spent: 0 })
   const [latestMessage, setLatestMessage] = useState<{ text: string; user_email: string | null } | null>(null)
   const [error, setError] = useState('')
 
@@ -18,13 +19,22 @@ export default function HomePage() {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes] = await Promise.all([
+      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetCatRes, budgetItemRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('engagement_guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('messages').select('text, user_email').order('created_at', { ascending: false }).limit(1),
-        supabase.from('documents').select('id', { count: 'exact', head: true })
+        supabase.from('documents').select('id', { count: 'exact', head: true }),
+        supabase.from('budget_categories').select('allocated'),
+        supabase.from('budget_items').select('actual')
       ])
+
+      if (budgetCatRes.data && budgetItemRes.data) {
+        setBudget({
+          allocated: budgetCatRes.data.reduce((s, c) => s + (Number(c.allocated) || 0), 0),
+          spent: budgetItemRes.data.reduce((s, i) => s + (Number(i.actual) || 0), 0)
+        })
+      }
 
       if (docsRes.count !== null) setDocCount(docsRes.count)
 
@@ -111,6 +121,17 @@ export default function HomePage() {
               <div className="bg-sage-primary h-2 rounded-full transition-all duration-300" style={{ width: `${taskPct}%` }}></div>
             </div>
             <p className="text-sm text-grey-soft">{taskPct}% complete · 8 phases · view tasks →</p>
+          </Link>
+
+          <Link href="/budget" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-sage-primary/40 transition-colors">
+            <div className="flex justify-between items-start mb-3">
+              <h2 className="text-xl font-serif text-charcoal">Budget</h2>
+              <span className="text-sm text-grey-soft">${Math.round(budget.spent).toLocaleString()} of ${Math.round(budget.allocated).toLocaleString()}</span>
+            </div>
+            <div className="w-full bg-grey-soft/20 rounded-full h-2 mb-2">
+              <div className={`h-2 rounded-full transition-all duration-300 ${budget.spent > budget.allocated && budget.allocated > 0 ? 'bg-rose-accent' : 'bg-sage-primary'}`} style={{ width: `${budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0}%` }}></div>
+            </div>
+            <p className="text-sm text-grey-soft">{budget.allocated > 0 ? `${Math.round((budget.spent / budget.allocated) * 100)}% of budget · view breakdown →` : 'Set up your budget →'}</p>
           </Link>
 
           <Link href="/documents" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-dusty-blue/40 transition-colors">

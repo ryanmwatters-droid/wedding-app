@@ -1,3 +1,23 @@
+export interface BudgetCategory {
+  id: string
+  name: string
+  sort_order: number
+  allocated: number
+  created_at: string
+}
+
+export interface BudgetItem {
+  id: string
+  category_id: string
+  name: string
+  estimated: number
+  actual: number
+  vendor: string | null
+  paid: boolean
+  notes: string | null
+  created_at: string
+}
+
 export interface Document {
   id: string
   storage_path: string
