@@ -92,7 +92,8 @@ export default function HomePage() {
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
 
   const taskPct = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0
-  const rsvpPct = guestStats.sent > 0 ? Math.round((guestStats.received / guestStats.sent) * 100) : 0
+  const budgetPct = budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0
+  const overBudget = budget.spent > budget.allocated && budget.allocated > 0
 
   return (
     <div className="min-h-screen bg-cream p-4">
@@ -106,12 +107,12 @@ export default function HomePage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>
         )}
 
-        <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
+        <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-4 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
           <div className="flex justify-between items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-medium text-charcoal mb-1">Wedding Chat</h2>
+              <div className="text-xs uppercase tracking-wider text-grey-soft mb-1">Wedding Chat</div>
               {latestMessage ? (
-                <p className="text-sm text-grey-soft truncate italic">&ldquo;{latestMessage.text}&rdquo;</p>
+                <p className="text-sm text-charcoal truncate italic">&ldquo;{latestMessage.text}&rdquo;</p>
               ) : (
                 <p className="text-sm text-grey-soft italic">Start a conversation...</p>
               )}
@@ -120,87 +121,107 @@ export default function HomePage() {
           </div>
         </Link>
 
-        <div className="grid gap-4">
-          <Link href="/tasks" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-sage-primary/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Wedding Tasks</h2>
-              <span className="text-sm text-grey-soft">{taskStats.completed} / {taskStats.total}</span>
+        <div className="grid grid-cols-2 gap-4">
+          <Link href="/tasks" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Planning</span>
+              {taskPct === 100 && <span className="text-sage-primary text-sm">✓</span>}
             </div>
-            <div className="w-full bg-grey-soft/20 rounded-full h-2 mb-2">
-              <div className="bg-sage-primary h-2 rounded-full transition-all duration-300" style={{ width: `${taskPct}%` }}></div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Wedding Tasks</h3>
+            <p className="text-xs text-grey-soft italic mb-4">8 phases · Foundation → post-wedding</p>
+            <div className="w-full bg-grey-soft/15 rounded-full h-1.5 mb-2">
+              <div className="bg-sage-primary h-1.5 rounded-full transition-all duration-500" style={{ width: `${taskPct}%` }}></div>
             </div>
-            <p className="text-sm text-grey-soft">{taskPct}% complete · 8 phases · view tasks →</p>
+            <div className="flex justify-between text-xs text-grey-soft">
+              <span>{taskStats.completed} of {taskStats.total}</span>
+              <span>{taskPct}%</span>
+            </div>
           </Link>
 
-          <Link href="/budget" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-sage-primary/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Budget</h2>
-              <span className="text-sm text-grey-soft">${Math.round(budget.spent).toLocaleString()} of ${Math.round(budget.allocated).toLocaleString()}</span>
+          <Link href="/budget" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Money</span>
+              {overBudget && <span className="text-rose-accent text-xs">over</span>}
             </div>
-            <div className="w-full bg-grey-soft/20 rounded-full h-2 mb-2">
-              <div className={`h-2 rounded-full transition-all duration-300 ${budget.spent > budget.allocated && budget.allocated > 0 ? 'bg-rose-accent' : 'bg-sage-primary'}`} style={{ width: `${budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0}%` }}></div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Budget</h3>
+            <p className="text-xs text-grey-soft italic mb-4">
+              {budget.allocated > 0 ? `$${Math.round(budget.spent).toLocaleString()} of $${Math.round(budget.allocated).toLocaleString()}` : 'No budget set yet'}
+            </p>
+            <div className="w-full bg-grey-soft/15 rounded-full h-1.5 mb-2">
+              <div className={`h-1.5 rounded-full transition-all duration-500 ${overBudget ? 'bg-rose-accent' : 'bg-sage-primary'}`} style={{ width: `${budgetPct}%` }}></div>
             </div>
-            <p className="text-sm text-grey-soft">{budget.allocated > 0 ? `${Math.round((budget.spent / budget.allocated) * 100)}% of budget · view breakdown →` : 'Set up your budget →'}</p>
+            <div className="flex justify-between text-xs text-grey-soft">
+              <span>{budget.allocated > 0 ? `$${Math.round(budget.allocated - budget.spent).toLocaleString()} left` : '—'}</span>
+              <span>{budget.allocated > 0 ? `${budgetPct}%` : '—'}</span>
+            </div>
           </Link>
 
-          <Link href="/vendors" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Vendors</h2>
-              <span className="text-sm text-grey-soft">{vendorStats.total} {vendorStats.total === 1 ? 'lead' : 'leads'}</span>
+          <Link href="/guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
             </div>
-            <p className="text-sm text-grey-soft">{vendorStats.booked} booked · view all categories →</p>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
+            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              <div>
+                <div className="text-base font-medium text-charcoal">{guestStats.total}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
+              </div>
+              <div>
+                <div className="text-base font-medium text-rose-accent">{guestStats.received}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">RSVP'd</div>
+              </div>
+              <div>
+                <div className="text-base font-medium text-sage-primary">{guestStats.attending}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
+              </div>
+            </div>
           </Link>
 
-          <Link href="/documents" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-dusty-blue/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Documents</h2>
-              <span className="text-sm text-grey-soft">{docCount} {docCount === 1 ? 'file' : 'files'}</span>
+          <Link href="/engagement-guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
             </div>
-            <p className="text-sm text-grey-soft">PDFs, vendor decks, contracts, inspiration · view documents →</p>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
+            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
+            <div className="grid grid-cols-3 gap-1 text-center">
+              <div>
+                <div className="text-base font-medium text-charcoal">{engagementStats.total}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
+              </div>
+              <div>
+                <div className="text-base font-medium text-rose-accent">{engagementStats.received}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">RSVP'd</div>
+              </div>
+              <div>
+                <div className="text-base font-medium text-sage-primary">{engagementStats.attending}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
+              </div>
+            </div>
           </Link>
 
-          <Link href="/guests" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Wedding Guest List</h2>
-              <span className="text-sm text-grey-soft">{guestStats.total} invited</span>
+          <Link href="/vendors" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Outreach</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center mt-4">
-              <div>
-                <div className="text-xl font-bold text-rose-accent">{guestStats.sent}</div>
-                <div className="text-xs text-grey-soft">Sent</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-rose-accent">{guestStats.received}</div>
-                <div className="text-xs text-grey-soft">RSVP'd</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-sage-primary">{guestStats.attending}</div>
-                <div className="text-xs text-grey-soft">Attending</div>
-              </div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Vendors</h3>
+            <p className="text-xs text-grey-soft italic mb-4">Photo, florals, catering + more</p>
+            <div className="flex justify-between text-xs text-grey-soft">
+              <span>{vendorStats.total} {vendorStats.total === 1 ? 'lead' : 'leads'}</span>
+              <span>{vendorStats.booked} booked</span>
             </div>
-            <p className="text-sm text-grey-soft mt-3">{rsvpPct}% of invitations responded · view guests →</p>
           </Link>
 
-          <Link href="/engagement-guests" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
-            <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Engagement Party Guest List</h2>
-              <span className="text-sm text-grey-soft">{engagementStats.total} invited</span>
+          <Link href="/documents" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-dusty-blue/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Reference</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center mt-4">
-              <div>
-                <div className="text-xl font-bold text-rose-accent">{engagementStats.sent}</div>
-                <div className="text-xs text-grey-soft">Sent</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-rose-accent">{engagementStats.received}</div>
-                <div className="text-xs text-grey-soft">RSVP'd</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold text-sage-primary">{engagementStats.attending}</div>
-                <div className="text-xs text-grey-soft">Attending</div>
-              </div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Documents</h3>
+            <p className="text-xs text-grey-soft italic mb-4">PDFs, decks, contracts, inspiration</p>
+            <div className="flex justify-between text-xs text-grey-soft">
+              <span>{docCount} {docCount === 1 ? 'file' : 'files'}</span>
+              <span>view all</span>
             </div>
-            <p className="text-sm text-grey-soft mt-3">view engagement guests →</p>
           </Link>
         </div>
       </div>
