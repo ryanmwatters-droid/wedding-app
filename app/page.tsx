@@ -9,6 +9,7 @@ export default function HomePage() {
   const { session, logout } = useAuth()
   const [taskStats, setTaskStats] = useState({ total: 0, completed: 0 })
   const [guestStats, setGuestStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
+  const [engagementStats, setEngagementStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
   const [docCount, setDocCount] = useState(0)
   const [latestMessage, setLatestMessage] = useState<{ text: string; user_email: string | null } | null>(null)
   const [error, setError] = useState('')
@@ -17,14 +18,24 @@ export default function HomePage() {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, msgRes, docsRes] = await Promise.all([
+      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
+        supabase.from('engagement_guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('messages').select('text, user_email').order('created_at', { ascending: false }).limit(1),
         supabase.from('documents').select('id', { count: 'exact', head: true })
       ])
 
       if (docsRes.count !== null) setDocCount(docsRes.count)
+
+      if (engagementRes.data) {
+        setEngagementStats({
+          total: engagementRes.data.reduce((sum, g) => sum + (g.party_size || 1), 0),
+          sent: engagementRes.data.filter(g => g.invitation_sent).length,
+          received: engagementRes.data.filter(g => g.rsvp_received).length,
+          attending: engagementRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
+        })
+      }
 
       if (tasksRes.data) {
         setTaskStats({
@@ -112,7 +123,7 @@ export default function HomePage() {
 
           <Link href="/guests" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
             <div className="flex justify-between items-start mb-3">
-              <h2 className="text-xl font-serif text-charcoal">Guest List</h2>
+              <h2 className="text-xl font-serif text-charcoal">Wedding Guest List</h2>
               <span className="text-sm text-grey-soft">{guestStats.total} invited</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center mt-4">
@@ -130,6 +141,28 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-sm text-grey-soft mt-3">{rsvpPct}% of invitations responded · view guests →</p>
+          </Link>
+
+          <Link href="/engagement-guests" className="bg-white rounded-2xl p-6 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
+            <div className="flex justify-between items-start mb-3">
+              <h2 className="text-xl font-serif text-charcoal">Engagement Party Guest List</h2>
+              <span className="text-sm text-grey-soft">{engagementStats.total} invited</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center mt-4">
+              <div>
+                <div className="text-xl font-bold text-rose-accent">{engagementStats.sent}</div>
+                <div className="text-xs text-grey-soft">Sent</div>
+              </div>
+              <div>
+                <div className="text-xl font-bold text-rose-accent">{engagementStats.received}</div>
+                <div className="text-xs text-grey-soft">RSVP'd</div>
+              </div>
+              <div>
+                <div className="text-xl font-bold text-sage-primary">{engagementStats.attending}</div>
+                <div className="text-xs text-grey-soft">Attending</div>
+              </div>
+            </div>
+            <p className="text-sm text-grey-soft mt-3">view engagement guests →</p>
           </Link>
         </div>
       </div>
