@@ -8,6 +8,30 @@ import { Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus } from '@/lib/typ
 import { useAuth } from '@/lib/useAuth'
 import { VENDOR_TO_BUDGET_CATEGORY } from '@/lib/vendor-budget-map'
 
+const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`
+
+function prettyUrl(u: string): string {
+  try {
+    const url = new URL(u.startsWith('http') ? u : `https://${u}`)
+    return url.hostname.replace(/^www\./, '') + (url.pathname !== '/' ? url.pathname : '')
+  } catch {
+    return u
+  }
+}
+
+function fullUrl(u: string): string {
+  return u.startsWith('http') ? u : `https://${u}`
+}
+
+function igUrl(handle: string): string {
+  const h = handle.replace(/^@/, '').trim()
+  return `https://instagram.com/${h}`
+}
+
+function shortDate(d: string): string {
+  return new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
 const statusColor = (s: VendorStatus): string => {
   switch (s) {
     case 'Booked': return 'bg-sage-primary text-white'
@@ -474,22 +498,67 @@ export default function VendorCategoryDetail() {
         {vendors.length === 0 ? (
           <div className="text-center text-grey-soft py-8 italic">No vendors in this category yet.</div>
         ) : (
-          <div className="bg-white rounded-2xl border border-grey-soft/20 overflow-hidden">
+          <div className="space-y-2">
             {vendors.map(v => (
-              <button
+              <div
                 key={v.id}
                 onClick={() => setSelectedId(v.id)}
-                className="w-full grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter') setSelectedId(v.id) }}
+                className="bg-white rounded-2xl border border-grey-soft/20 p-4 cursor-pointer hover:border-sage-primary/30 hover:shadow-sm transition-all"
               >
-                <div className="min-w-0">
-                  <div className="text-charcoal font-medium truncate">{v.business_name}</div>
-                  <div className="text-xs text-grey-soft truncate">
-                    {v.contact_name && `${v.contact_name} · `}
-                    {v.last_contact_date ? `Last contact ${new Date(v.last_contact_date).toLocaleDateString()}` : 'No contact yet'}
+                <div className="flex justify-between items-start gap-3 mb-2">
+                  <div className="min-w-0">
+                    <div className="text-charcoal font-medium text-base">{v.business_name}</div>
+                    {v.contact_name && <div className="text-xs text-grey-soft">{v.contact_name}</div>}
                   </div>
+                  <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColor(v.status)}`}>{v.status}</span>
                 </div>
-                <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColor(v.status)}`}>{v.status}</span>
-              </button>
+
+                {(v.website || v.instagram) && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-2">
+                    {v.website && (
+                      <a
+                        href={fullUrl(v.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-sage-primary hover:underline truncate max-w-[260px]"
+                      >
+                        ↗ {prettyUrl(v.website)}
+                      </a>
+                    )}
+                    {v.instagram && (
+                      <a
+                        href={igUrl(v.instagram)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-rose-accent hover:underline"
+                      >
+                        @{v.instagram.replace(/^@/, '')}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-grey-soft">
+                  {v.last_contact_date && <span>Last: {shortDate(v.last_contact_date)}</span>}
+                  {v.next_action_date && (
+                    <span>
+                      Next: {shortDate(v.next_action_date)}
+                      {v.next_action ? ` · ${v.next_action}` : ''}
+                    </span>
+                  )}
+                  {v.quoted_cost != null && <span className="text-charcoal">Quoted: {fmt(Number(v.quoted_cost))}</span>}
+                  {v.estimated_cost != null && v.quoted_cost == null && <span>Est: {fmt(Number(v.estimated_cost))}</span>}
+                  {v.rating != null && (
+                    <span className="text-rose-accent">{'★'.repeat(v.rating)}<span className="text-grey-soft/30">{'★'.repeat(5 - v.rating)}</span></span>
+                  )}
+                  {v.recommended_by && <span>via {v.recommended_by}</span>}
+                </div>
+              </div>
             ))}
           </div>
         )}
