@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import { Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 import { VENDOR_TO_BUDGET_CATEGORY } from '@/lib/vendor-budget-map'
+import { ContactList } from '@/components/ContactList'
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`
 
@@ -42,43 +43,6 @@ const statusColor = (s: VendorStatus): string => {
     case 'Not a Fit': return 'bg-grey-soft/20 text-grey-soft line-through'
     default: return 'bg-grey-soft/15 text-charcoal'
   }
-}
-
-function ContactList({ label, values, onChange, placeholder }: {
-  label: string
-  values: string[]
-  onChange: (next: string[]) => void
-  placeholder: string
-}) {
-  const entries = values.length === 0 ? [''] : values
-  return (
-    <div>
-      <div className="text-xs text-grey-soft mb-1">{label}</div>
-      <div className="space-y-1">
-        {entries.map((v, i) => (
-          <div key={i} className="flex gap-1">
-            <input
-              value={v}
-              onChange={(e) => {
-                const next = [...entries]
-                next[i] = e.target.value
-                onChange(next.filter(x => x.trim() || x === ''))
-              }}
-              onBlur={() => onChange(entries.map(x => x.trim()).filter(Boolean))}
-              placeholder={placeholder}
-              className="flex-1 px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
-            />
-            {entries.length > 1 && (
-              <button type="button" onClick={() => onChange(entries.filter((_, j) => j !== i).map(x => x.trim()).filter(Boolean))} className="px-2 text-grey-soft hover:text-red-500">×</button>
-            )}
-          </div>
-        ))}
-      </div>
-      <button type="button" onClick={() => onChange([...entries.map(x => x.trim()).filter(Boolean), ''])} className="mt-1 text-xs text-sage-primary hover:text-sage-primary/80">
-        + Add {label.toLowerCase()}
-      </button>
-    </div>
-  )
 }
 
 function StarRating({ value, onChange }: { value: number | null; onChange: (n: number | null) => void }) {
