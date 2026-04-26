@@ -594,6 +594,10 @@ export default function VendorCategoryDetail() {
                       )}
                       {v.recommended_by && <span>via {v.recommended_by}</span>}
                     </div>
+
+                    {v.notes && (
+                      <p className="mt-2 text-xs text-grey-soft italic line-clamp-2">{v.notes}</p>
+                    )}
                   </SortableVendorRow>
                 ))}
               </div>
