@@ -62,6 +62,19 @@ export interface BudgetItem {
   created_at: string
 }
 
+export interface EventVenue {
+  id: string
+  slug: string
+  label: string
+  venue_name: string | null
+  venue_address: string | null
+  venue_url: string | null
+  event_date: string | null
+  notes: string | null
+  booked: boolean
+  created_at: string
+}
+
 export interface Document {
   id: string
   storage_path: string

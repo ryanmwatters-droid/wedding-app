@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
+import { EventVenue } from '@/lib/types'
 
 const ENGAGEMENT_PARTY = new Date('2026-06-20T18:30:00-05:00')
 
@@ -45,6 +46,7 @@ export default function HomePage() {
   const [docCount, setDocCount] = useState(0)
   const [budget, setBudget] = useState({ allocated: 0, spent: 0 })
   const [vendorStats, setVendorStats] = useState({ total: 0, booked: 0 })
+  const [venues, setVenues] = useState<EventVenue[]>([])
   const [latestMessage, setLatestMessage] = useState<{ text: string; user_email: string | null } | null>(null)
   const [error, setError] = useState('')
 
@@ -52,7 +54,7 @@ export default function HomePage() {
     if (!session) return
 
     const loadStats = async () => {
-      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetSettingsRes, budgetItemRes, vendorsRes] = await Promise.all([
+      const [tasksRes, guestsRes, engagementRes, msgRes, docsRes, budgetSettingsRes, budgetItemRes, vendorsRes, venuesRes] = await Promise.all([
         supabase.from('tasks').select('completed'),
         supabase.from('guests').select('invitation_sent, rsvp_received, attending, party_size'),
         supabase.from('engagement_guests').select('invitation_sent, rsvp_received, attending, party_size'),
@@ -60,8 +62,11 @@ export default function HomePage() {
         supabase.from('documents').select('id', { count: 'exact', head: true }),
         supabase.from('budget_settings').select('total_budget').limit(1).single(),
         supabase.from('budget_items').select('actual'),
-        supabase.from('vendors').select('status')
+        supabase.from('vendors').select('status'),
+        supabase.from('event_venues').select('*')
       ])
+
+      if (venuesRes.data) setVenues(venuesRes.data)
 
       if (vendorsRes.data) {
         setVendorStats({
@@ -116,12 +121,18 @@ export default function HomePage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         setLatestMessage({ text: payload.new.text, user_email: payload.new.user_email })
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'event_venues' }, (payload) => {
+        setVenues(prev => prev.map(v => v.id === payload.new.id ? payload.new as EventVenue : v))
+      })
       .subscribe()
 
     return () => { channel.unsubscribe() }
   }, [session])
 
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
+
+  const weddingVenue = venues.find(v => v.slug === 'wedding')
+  const engagementVenue = venues.find(v => v.slug === 'engagement')
 
   const taskPct = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0
   const budgetPct = budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0
@@ -187,6 +198,34 @@ export default function HomePage() {
             <div className="flex justify-between text-xs text-grey-soft">
               <span>{budget.allocated > 0 ? `$${Math.round(budget.allocated - budget.spent).toLocaleString()} left` : '—'}</span>
               <span>{budget.allocated > 0 ? `${budgetPct}%` : '—'}</span>
+            </div>
+          </Link>
+
+          <Link href="/venues/wedding" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
+              {weddingVenue?.booked && <span className="text-sage-primary text-sm">✓</span>}
+            </div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
+            <p className="text-xs text-grey-soft italic mb-2">
+              {weddingVenue?.venue_name || 'Not chosen yet'}
+            </p>
+            <div className="text-xs text-grey-soft truncate">
+              {weddingVenue?.event_date ? new Date(weddingVenue.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : weddingVenue?.venue_address || 'Tap to add details'}
+            </div>
+          </Link>
+
+          <Link href="/venues/engagement" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
+              {engagementVenue?.booked && <span className="text-sage-primary text-sm">✓</span>}
+            </div>
+            <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
+            <p className="text-xs text-grey-soft italic mb-2">
+              {engagementVenue?.venue_name || 'Not chosen yet'}
+            </p>
+            <div className="text-xs text-grey-soft truncate">
+              {engagementVenue?.event_date ? new Date(engagementVenue.event_date).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : engagementVenue?.venue_address || 'Tap to add details'}
             </div>
           </Link>
 
