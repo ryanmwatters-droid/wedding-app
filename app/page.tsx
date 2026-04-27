@@ -121,8 +121,14 @@ export default function HomePage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         setLatestMessage({ text: payload.new.text, user_email: payload.new.user_email })
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'event_venues' }, (payload) => {
-        setVenues(prev => prev.map(v => v.id === payload.new.id ? payload.new as EventVenue : v))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_venues' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setVenues(prev => prev.some(v => v.id === payload.new.id) ? prev : [...prev, payload.new as EventVenue])
+        } else if (payload.eventType === 'UPDATE') {
+          setVenues(prev => prev.map(v => v.id === payload.new.id ? payload.new as EventVenue : v))
+        } else if (payload.eventType === 'DELETE') {
+          setVenues(prev => prev.filter(v => v.id !== payload.old.id))
+        }
       })
       .subscribe()
 
@@ -131,8 +137,10 @@ export default function HomePage() {
 
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
 
-  const weddingVenue = venues.find(v => v.slug === 'wedding')
-  const engagementVenue = venues.find(v => v.slug === 'engagement')
+  const weddingVenues = venues.filter(v => v.slug === 'wedding')
+  const engagementVenues = venues.filter(v => v.slug === 'engagement')
+  const weddingBooked = weddingVenues.find(v => v.status === 'Booked')
+  const engagementBooked = engagementVenues.find(v => v.status === 'Booked')
 
   const taskPct = taskStats.total > 0 ? Math.round((taskStats.completed / taskStats.total) * 100) : 0
   const budgetPct = budget.allocated > 0 ? Math.min(100, Math.round((budget.spent / budget.allocated) * 100)) : 0
@@ -204,28 +212,28 @@ export default function HomePage() {
           <Link href="/venues/wedding" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
-              {weddingVenue?.status === 'Booked' && <span className="text-sage-primary text-sm">✓</span>}
+              {weddingBooked && <span className="text-sage-primary text-sm">✓</span>}
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
             <p className="text-xs text-grey-soft italic mb-2">
-              {weddingVenue?.venue_name || 'Not chosen yet'}
+              {weddingBooked?.venue_name || (weddingVenues.length > 0 ? `${weddingVenues.length} ${weddingVenues.length === 1 ? 'candidate' : 'candidates'}` : 'Not chosen yet')}
             </p>
             <div className="text-xs text-grey-soft truncate">
-              {weddingVenue?.event_date ? new Date(weddingVenue.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : weddingVenue?.venue_address || 'Tap to add details'}
+              {weddingBooked?.event_date ? new Date(weddingBooked.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : weddingBooked?.venue_address || (weddingVenues.length > 0 ? 'Tap to compare →' : 'Tap to add →')}
             </div>
           </Link>
 
           <Link href="/venues/engagement" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
-              {engagementVenue?.status === 'Booked' && <span className="text-sage-primary text-sm">✓</span>}
+              {engagementBooked && <span className="text-sage-primary text-sm">✓</span>}
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
             <p className="text-xs text-grey-soft italic mb-2">
-              {engagementVenue?.venue_name || 'Not chosen yet'}
+              {engagementBooked?.venue_name || (engagementVenues.length > 0 ? `${engagementVenues.length} ${engagementVenues.length === 1 ? 'candidate' : 'candidates'}` : 'Not chosen yet')}
             </p>
             <div className="text-xs text-grey-soft truncate">
-              {engagementVenue?.event_date ? new Date(engagementVenue.event_date).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : engagementVenue?.venue_address || 'Tap to add details'}
+              {engagementBooked?.event_date ? new Date(engagementBooked.event_date).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : engagementBooked?.venue_address || (engagementVenues.length > 0 ? 'Tap to compare →' : 'Tap to add →')}
             </div>
           </Link>
 
