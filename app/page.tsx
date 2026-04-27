@@ -204,7 +204,7 @@ export default function HomePage() {
           <Link href="/venues/wedding" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
-              {weddingVenue?.booked && <span className="text-sage-primary text-sm">✓</span>}
+              {weddingVenue?.status === 'Booked' && <span className="text-sage-primary text-sm">✓</span>}
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
             <p className="text-xs text-grey-soft italic mb-2">
@@ -218,7 +218,7 @@ export default function HomePage() {
           <Link href="/venues/engagement" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
-              {engagementVenue?.booked && <span className="text-sage-primary text-sm">✓</span>}
+              {engagementVenue?.status === 'Booked' && <span className="text-sage-primary text-sm">✓</span>}
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Venue</h3>
             <p className="text-xs text-grey-soft italic mb-2">

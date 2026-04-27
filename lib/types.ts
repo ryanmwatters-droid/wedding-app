@@ -71,7 +71,22 @@ export interface EventVenue {
   venue_url: string | null
   event_date: string | null
   notes: string | null
-  booked: boolean
+  contact_name: string | null
+  email: string[] | null
+  phone: string[] | null
+  instagram: string | null
+  status: VendorStatus
+  estimated_cost: number | null
+  quoted_cost: number | null
+  deposit_paid: number | null
+  first_contact_date: string | null
+  last_contact_date: string | null
+  next_action_date: string | null
+  next_action: string | null
+  recommended_by: string | null
+  rating: number | null
+  pros: string | null
+  cons: string | null
   created_at: string
 }
 
