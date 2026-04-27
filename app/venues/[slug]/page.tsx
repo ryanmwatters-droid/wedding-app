@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -350,8 +350,30 @@ export default function VenueListPage() {
   const [importSearch, setImportSearch] = useState('')
   const [importSelection, setImportSelection] = useState<Set<string>>(new Set())
   const [importing, setImporting] = useState(false)
+  const [allDocs, setAllDocs] = useState<Document[]>([])
 
   const label = params.slug === 'wedding' ? 'Wedding' : params.slug === 'engagement' ? 'Engagement Party' : params.slug
+
+  const docsByVenue = useMemo(() => {
+    const grouped: Record<string, Document[]> = {}
+    for (const d of allDocs) {
+      if (!d.venue_id) continue
+      if (!grouped[d.venue_id]) grouped[d.venue_id] = []
+      grouped[d.venue_id].push(d)
+    }
+    return grouped
+  }, [allDocs])
+
+  const openDocFromCard = async (doc: Document) => {
+    try {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 60 * 60)
+      if (error) throw error
+      window.open(data.signedUrl, '_blank')
+    } catch (err) {
+      console.error('Open failed:', err)
+      setError('Failed to open file.')
+    }
+  }
 
   useEffect(() => {
     if (!session) return
@@ -380,6 +402,29 @@ export default function VenueListPage() {
           setVenues(prev => prev.map(v => v.id === payload.new.id ? payload.new as EventVenue : v))
         } else if (payload.eventType === 'DELETE') {
           setVenues(prev => prev.filter(v => v.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    return () => { channel.unsubscribe() }
+  }, [session, params.slug])
+
+  useEffect(() => {
+    if (!session) return
+    const fetchDocs = async () => {
+      const { data } = await supabase.from('documents').select('*').not('venue_id', 'is', null)
+      setAllDocs((data || []) as Document[])
+    }
+    fetchDocs()
+
+    const channel = supabase.channel(`venue-docs-${params.slug}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new.venue_id) {
+          setAllDocs(prev => prev.some(d => d.id === payload.new.id) ? prev : [...prev, payload.new as Document])
+        } else if (payload.eventType === 'UPDATE') {
+          setAllDocs(prev => prev.map(d => d.id === payload.new.id ? payload.new as Document : d))
+        } else if (payload.eventType === 'DELETE') {
+          setAllDocs(prev => prev.filter(d => d.id !== payload.old.id))
         }
       })
       .subscribe()
@@ -600,6 +645,22 @@ export default function VenueListPage() {
                         <span className="text-rose-accent">{'★'.repeat(v.rating)}<span className="text-grey-soft/30">{'★'.repeat(5 - v.rating)}</span></span>
                       )}
                     </div>
+
+                    {(docsByVenue[v.id] || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {docsByVenue[v.id].map(d => (
+                          <button
+                            key={d.id}
+                            onClick={(e) => { e.stopPropagation(); openDocFromCard(d) }}
+                            className="text-base px-2 py-1 bg-cream/60 hover:bg-cream rounded-lg transition-colors flex items-center gap-1 max-w-[180px]"
+                            title={d.display_name}
+                          >
+                            <span>{fileIcon(d.mime_type)}</span>
+                            <span className="text-xs text-charcoal truncate">{d.display_name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {v.notes && <div className="text-xs text-grey-soft italic mt-2 line-clamp-2">{v.notes}</div>}
                   </SortableVenueRow>
