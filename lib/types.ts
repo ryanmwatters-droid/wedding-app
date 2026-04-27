@@ -87,6 +87,7 @@ export interface EventVenue {
   rating: number | null
   pros: string | null
   cons: string | null
+  sort_order: number | null
   created_at: string
 }
 

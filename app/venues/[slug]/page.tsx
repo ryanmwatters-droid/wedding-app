@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase'
 import { EventVenue, Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 import { ContactList } from '@/components/ContactList'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`
 
@@ -48,6 +51,39 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (n: n
         </button>
       ))}
       {value && <button type="button" onClick={() => onChange(null)} className="text-xs text-grey-soft hover:text-charcoal ml-1">clear</button>}
+    </div>
+  )
+}
+
+function SortableVenueRow({ venue, onClick, children }: { venue: EventVenue; onClick: () => void; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: venue.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-white rounded-2xl border border-grey-soft/20 p-4 hover:border-sage-primary/30 hover:shadow-sm transition-all flex gap-2">
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="self-stretch flex items-center px-1 -ml-1 text-grey-soft/40 hover:text-grey-soft cursor-grab active:cursor-grabbing touch-none"
+        aria-label="Drag to reorder"
+      >
+        <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor">
+          <circle cx="4" cy="5" r="1.5" />
+          <circle cx="10" cy="5" r="1.5" />
+          <circle cx="4" cy="10" r="1.5" />
+          <circle cx="10" cy="10" r="1.5" />
+          <circle cx="4" cy="15" r="1.5" />
+          <circle cx="10" cy="15" r="1.5" />
+        </svg>
+      </button>
+      <div onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onClick() }} className="flex-1 cursor-pointer min-w-0">
+        {children}
+      </div>
     </div>
   )
 }
@@ -202,7 +238,7 @@ export default function VenueListPage() {
 
     const fetchVenues = async () => {
       try {
-        const { data, error } = await supabase.from('event_venues').select('*').eq('slug', params.slug).order('created_at')
+        const { data, error } = await supabase.from('event_venues').select('*').eq('slug', params.slug).order('sort_order', { nullsFirst: false }).order('created_at')
         if (error) throw error
         setVenues(data || [])
       } catch (err) {
@@ -241,6 +277,36 @@ export default function VenueListPage() {
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [])
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = venues.findIndex(v => v.id === active.id)
+    const newIndex = venues.findIndex(v => v.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const reordered = [...venues]
+    const [moved] = reordered.splice(oldIndex, 1)
+    reordered.splice(newIndex, 0, moved)
+    setVenues(reordered.map((v, i) => ({ ...v, sort_order: i + 1 })))
+
+    try {
+      await Promise.all(
+        reordered.map((v, i) =>
+          supabase.from('event_venues').update({ sort_order: i + 1 }).eq('id', v.id)
+        )
+      )
+    } catch (err) {
+      console.error('Reorder failed:', err)
+      setError('Failed to save order.')
+    }
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const updateVenue = async (id: string, updates: Partial<EventVenue>) => {
     setVenues(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v))
@@ -378,52 +444,49 @@ export default function VenueListPage() {
         {venues.length === 0 ? (
           <div className="text-center text-grey-soft py-8 italic">No venues yet. Import from your vendors or add one manually.</div>
         ) : (
-          <div className="space-y-2">
-            {venues.map(v => (
-              <div
-                key={v.id}
-                onClick={() => setSelectedId(v.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter') setSelectedId(v.id) }}
-                className="bg-white rounded-2xl border border-grey-soft/20 p-4 cursor-pointer hover:border-sage-primary/30 hover:shadow-sm transition-all"
-              >
-                <div className="flex justify-between items-start gap-3 mb-2">
-                  <div className="min-w-0">
-                    <div className="text-charcoal font-medium text-base">{v.venue_name || '(Unnamed venue)'}</div>
-                    {v.contact_name && <div className="text-xs text-grey-soft">{v.contact_name}</div>}
-                  </div>
-                  <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColor(v.status)}`}>{v.status}</span>
-                </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={venues.map(v => v.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {venues.map(v => (
+                  <SortableVenueRow key={v.id} venue={v} onClick={() => setSelectedId(v.id)}>
+                    <div className="flex justify-between items-start gap-3 mb-2">
+                      <div className="min-w-0">
+                        <div className="text-charcoal font-medium text-base">{v.venue_name || '(Unnamed venue)'}</div>
+                        {v.contact_name && <div className="text-xs text-grey-soft">{v.contact_name}</div>}
+                      </div>
+                      <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${statusColor(v.status)}`}>{v.status}</span>
+                    </div>
 
-                {(v.venue_url || v.instagram) && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-2">
-                    {v.venue_url && (
-                      <a href={fullUrl(v.venue_url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-sage-primary hover:underline truncate max-w-[260px]">↗ {prettyUrl(v.venue_url)}</a>
+                    {(v.venue_url || v.instagram) && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs mb-2">
+                        {v.venue_url && (
+                          <a href={fullUrl(v.venue_url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-sage-primary hover:underline truncate max-w-[260px]">↗ {prettyUrl(v.venue_url)}</a>
+                        )}
+                        {v.instagram && (
+                          <a href={igUrl(v.instagram)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-rose-accent hover:underline">@{v.instagram.replace(/^@/, '')}</a>
+                        )}
+                      </div>
                     )}
-                    {v.instagram && (
-                      <a href={igUrl(v.instagram)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-rose-accent hover:underline">@{v.instagram.replace(/^@/, '')}</a>
-                    )}
-                  </div>
-                )}
 
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-grey-soft">
-                  {v.event_date && <span className="text-charcoal">📅 {new Date(v.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
-                  {v.last_contact_date && <span>Last: {shortDate(v.last_contact_date)}</span>}
-                  {v.next_action_date && (
-                    <span>Next: {shortDate(v.next_action_date)}{v.next_action ? ` · ${v.next_action}` : ''}</span>
-                  )}
-                  {v.quoted_cost != null && <span className="text-charcoal">Quoted: {fmt(Number(v.quoted_cost))}</span>}
-                  {v.estimated_cost != null && v.quoted_cost == null && <span>Est: {fmt(Number(v.estimated_cost))}</span>}
-                  {v.rating != null && (
-                    <span className="text-rose-accent">{'★'.repeat(v.rating)}<span className="text-grey-soft/30">{'★'.repeat(5 - v.rating)}</span></span>
-                  )}
-                </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-grey-soft">
+                      {v.event_date && <span className="text-charcoal">📅 {new Date(v.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
+                      {v.last_contact_date && <span>Last: {shortDate(v.last_contact_date)}</span>}
+                      {v.next_action_date && (
+                        <span>Next: {shortDate(v.next_action_date)}{v.next_action ? ` · ${v.next_action}` : ''}</span>
+                      )}
+                      {v.quoted_cost != null && <span className="text-charcoal">Quoted: {fmt(Number(v.quoted_cost))}</span>}
+                      {v.estimated_cost != null && v.quoted_cost == null && <span>Est: {fmt(Number(v.estimated_cost))}</span>}
+                      {v.rating != null && (
+                        <span className="text-rose-accent">{'★'.repeat(v.rating)}<span className="text-grey-soft/30">{'★'.repeat(5 - v.rating)}</span></span>
+                      )}
+                    </div>
 
-                {v.notes && <div className="text-xs text-grey-soft italic mt-2 line-clamp-2">{v.notes}</div>}
+                    {v.notes && <div className="text-xs text-grey-soft italic mt-2 line-clamp-2">{v.notes}</div>}
+                  </SortableVenueRow>
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
