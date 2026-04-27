@@ -97,6 +97,7 @@ export interface Document {
   display_name: string
   description: string | null
   folder: string | null
+  venue_id: string | null
   uploaded_by: string | null
   uploaded_by_email: string | null
   size_bytes: number | null

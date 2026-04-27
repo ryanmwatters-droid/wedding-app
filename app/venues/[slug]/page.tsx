@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { EventVenue, Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus } from '@/lib/types'
+import { EventVenue, Vendor, VendorCategory, VENDOR_STATUSES, VendorStatus, Document } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 import { ContactList } from '@/components/ContactList'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
@@ -88,7 +88,125 @@ function SortableVenueRow({ venue, onClick, children }: { venue: EventVenue; onC
   )
 }
 
-function VenueDetail({ venue, onUpdate, onDelete, onClose }: {
+function fileIcon(mimeType: string | null): string {
+  if (!mimeType) return '📄'
+  if (mimeType.startsWith('image/')) return '🖼'
+  if (mimeType === 'application/pdf') return '📕'
+  if (mimeType.includes('word') || mimeType.includes('document')) return '📝'
+  if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊'
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return '📽'
+  return '📄'
+}
+
+function formatSize(bytes: number | null): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function VenueDocuments({ venueId, sessionUserId, sessionEmail }: {
+  venueId: string
+  sessionUserId: string
+  sessionEmail: string | null
+}) {
+  const [docs, setDocs] = useState<Document[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let mounted = true
+    supabase.from('documents').select('*').eq('venue_id', venueId).order('created_at', { ascending: false })
+      .then(({ data }) => { if (mounted) setDocs(data || []) })
+    return () => { mounted = false }
+  }, [venueId])
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setUploading(true)
+    setError('')
+
+    for (const file of files) {
+      try {
+        const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+        const { error: upErr } = await supabase.storage.from('documents').upload(path, file)
+        if (upErr) throw upErr
+
+        const { data, error: insErr } = await supabase.from('documents').insert({
+          storage_path: path,
+          display_name: file.name,
+          venue_id: venueId,
+          uploaded_by: sessionUserId,
+          uploaded_by_email: sessionEmail,
+          size_bytes: file.size,
+          mime_type: file.type || null
+        }).select().single()
+        if (insErr) throw insErr
+        if (data) setDocs(prev => [data as Document, ...prev])
+      } catch (err) {
+        console.error('Upload failed:', err)
+        setError(`Failed to upload ${file.name}`)
+      }
+    }
+
+    setUploading(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const openDoc = async (doc: Document) => {
+    try {
+      const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 60 * 60)
+      if (error) throw error
+      window.open(data.signedUrl, '_blank')
+    } catch (err) {
+      console.error('Open failed:', err)
+      setError('Failed to open file.')
+    }
+  }
+
+  const deleteDoc = async (doc: Document) => {
+    if (!confirm(`Delete "${doc.display_name}"?`)) return
+    setDocs(prev => prev.filter(d => d.id !== doc.id))
+    try {
+      await supabase.storage.from('documents').remove([doc.storage_path])
+      await supabase.from('documents').delete().eq('id', doc.id)
+    } catch (err) {
+      console.error('Delete failed:', err)
+      setError('Failed to delete.')
+    }
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-grey-soft/15">
+      <div className="text-xs text-grey-soft mb-2">Documents</div>
+      {error && <div className="text-xs text-red-600 mb-2">{error}</div>}
+      <input ref={fileInputRef} type="file" multiple onChange={handleUpload} disabled={uploading} className="hidden" id={`venue-upload-${venueId}`} />
+      <label htmlFor={`venue-upload-${venueId}`} className={`block w-full text-center py-3 border border-dashed border-grey-soft/30 rounded-lg cursor-pointer hover:border-sage-primary/50 hover:bg-cream/40 transition-colors text-sm ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+        {uploading ? 'Uploading...' : '📤 Tap to attach files'}
+      </label>
+      {docs.length > 0 && (
+        <div className="mt-3 space-y-1">
+          {docs.map(doc => (
+            <div key={doc.id} className="flex items-center gap-2 p-2 bg-cream/40 rounded-lg text-sm">
+              <button onClick={() => openDoc(doc)} className="text-lg" aria-label="Open">{fileIcon(doc.mime_type)}</button>
+              <button onClick={() => openDoc(doc)} className="flex-1 min-w-0 text-left text-charcoal hover:text-sage-primary truncate">
+                {doc.display_name}
+                <span className="text-grey-soft ml-2 text-xs">{formatSize(doc.size_bytes)}</span>
+              </button>
+              <button onClick={() => deleteDoc(doc)} className="text-grey-soft hover:text-red-500 text-xs px-1">×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function VenueDetail({ venue, sessionUserId, sessionEmail, onUpdate, onDelete, onClose }: {
+  sessionUserId: string
+  sessionEmail: string | null
   venue: EventVenue
   onUpdate: (id: string, updates: Partial<EventVenue>) => void
   onDelete: (id: string) => void
@@ -212,7 +330,9 @@ function VenueDetail({ venue, onUpdate, onDelete, onClose }: {
         <textarea defaultValue={venue.notes || ''} onBlur={(e) => { if (e.target.value !== (venue.notes || '')) onUpdate(venue.id, { notes: e.target.value || null }) }} placeholder="Capacity, package details, anything else..." rows={4} className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-sage-primary/30 placeholder:text-grey-soft/60" />
       </div>
 
-      <button onClick={() => { onDelete(venue.id); onClose() }} className="text-xs text-grey-soft hover:text-red-500 transition-colors">Delete venue</button>
+      <VenueDocuments venueId={venue.id} sessionUserId={sessionUserId} sessionEmail={sessionEmail} />
+
+      <button onClick={() => { onDelete(venue.id); onClose() }} className="mt-4 text-xs text-grey-soft hover:text-red-500 transition-colors">Delete venue</button>
     </div>
   )
 }
@@ -493,7 +613,7 @@ export default function VenueListPage() {
       {selected && (
         <div className="fixed inset-0 z-50 bg-charcoal/40 flex items-end sm:items-center justify-center" onClick={() => setSelectedId(null)}>
           <div className="bg-white w-full sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <VenueDetail venue={selected} onUpdate={updateVenue} onDelete={deleteVenue} onClose={() => setSelectedId(null)} />
+            <VenueDetail venue={selected} sessionUserId={session.user.id} sessionEmail={session.user.email ?? null} onUpdate={updateVenue} onDelete={deleteVenue} onClose={() => setSelectedId(null)} />
           </div>
         </div>
       )}
