@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Document } from '@/lib/types'
@@ -31,6 +31,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [currentFolder, setCurrentFolder] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -70,6 +71,18 @@ export default function DocumentsPage() {
     return () => { channel.unsubscribe() }
   }, [session])
 
+  const folders = useMemo(() => {
+    const set = new Set<string>()
+    docs.forEach(d => { if (d.folder) set.add(d.folder) })
+    return Array.from(set).sort()
+  }, [docs])
+
+  const visibleDocs = useMemo(() => {
+    return currentFolder === null
+      ? docs.filter(d => !d.folder)
+      : docs.filter(d => d.folder === currentFolder)
+  }, [docs, currentFolder])
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0 || !session) return
@@ -85,6 +98,7 @@ export default function DocumentsPage() {
         const { error: insErr } = await supabase.from('documents').insert({
           storage_path: path,
           display_name: file.name,
+          folder: currentFolder,
           uploaded_by: session.user.id,
           uploaded_by_email: session.user.email,
           size_bytes: file.size,
@@ -138,6 +152,29 @@ export default function DocumentsPage() {
     }
   }
 
+  const handleFolderChange = (doc: Document, value: string) => {
+    if (value === '__new__') {
+      const name = prompt('New folder name:')
+      const trimmed = name?.trim()
+      if (trimmed) updateDoc(doc.id, { folder: trimmed })
+    } else {
+      updateDoc(doc.id, { folder: value || null })
+    }
+  }
+
+  const createFolder = () => {
+    const name = prompt('New folder name:')
+    const trimmed = name?.trim()
+    if (!trimmed) return
+    if (folders.includes(trimmed)) {
+      setCurrentFolder(trimmed)
+      return
+    }
+    // Folder is "created" by entering it; it'll be empty until a file is added.
+    // Track empty folder by setting currentFolder. It won't persist until a file lands in it.
+    setCurrentFolder(trimmed)
+  }
+
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
 
   return (
@@ -153,6 +190,15 @@ export default function DocumentsPage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">
             {error}
             <button onClick={() => setError('')} className="float-right ml-2 text-red-500 hover:text-red-700">×</button>
+          </div>
+        )}
+
+        {currentFolder !== null && (
+          <div className="mb-4">
+            <button onClick={() => setCurrentFolder(null)} className="text-sm text-grey-soft hover:text-charcoal transition-colors">
+              ← All documents
+            </button>
+            <h2 className="text-xl font-serif text-charcoal mt-1">📁 {currentFolder}</h2>
           </div>
         )}
 
@@ -175,20 +221,60 @@ export default function DocumentsPage() {
             ) : (
               <>
                 <div className="text-3xl mb-2">📤</div>
-                <div className="text-charcoal font-medium">Tap to upload</div>
+                <div className="text-charcoal font-medium">
+                  Tap to upload{currentFolder !== null ? ` to ${currentFolder}` : ''}
+                </div>
                 <div className="text-xs text-grey-soft mt-1">PDFs, images, docs · up to 50MB each</div>
               </>
             )}
           </label>
         </div>
 
+        {currentFolder === null && (
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-sm uppercase tracking-wider text-grey-soft">Folders</h2>
+              <button onClick={createFolder} className="text-xs text-sage-primary hover:text-sage-primary/80 transition-colors">+ New folder</button>
+            </div>
+            {folders.length === 0 ? (
+              <div className="text-xs text-grey-soft italic">No folders yet. Create one above or organize files into folders below.</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {folders.map(folder => {
+                  const count = docs.filter(d => d.folder === folder).length
+                  return (
+                    <button
+                      key={folder}
+                      onClick={() => setCurrentFolder(folder)}
+                      className="text-left bg-white rounded-xl border border-grey-soft/20 p-3 hover:border-sage-primary/40 hover:shadow-sm transition-all"
+                    >
+                      <div className="text-2xl mb-1">📁</div>
+                      <div className="text-sm font-medium text-charcoal truncate">{folder}</div>
+                      <div className="text-xs text-grey-soft">{count} {count === 1 ? 'file' : 'files'}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentFolder === null && folders.length > 0 && visibleDocs.length > 0 && (
+          <h2 className="text-sm uppercase tracking-wider text-grey-soft mb-3">Unfiled</h2>
+        )}
+
         {loading ? (
           <div className="text-center text-grey-soft py-8 text-sm">Loading...</div>
-        ) : docs.length === 0 ? (
-          <div className="text-center text-grey-soft py-8 text-sm italic">No documents yet. Upload your first one above.</div>
+        ) : visibleDocs.length === 0 ? (
+          <div className="text-center text-grey-soft py-8 text-sm italic">
+            {currentFolder === null
+              ? folders.length > 0 ? 'No unfiled documents.' : 'No documents yet. Upload your first one above.'
+              : 'No files in this folder yet. Upload above.'
+            }
+          </div>
         ) : (
           <div className="space-y-2">
-            {docs.map(doc => (
+            {visibleDocs.map(doc => (
               <div key={doc.id} className="bg-white rounded-2xl border border-grey-soft/20 p-4">
                 <div className="flex items-start gap-3">
                   <button onClick={() => openDoc(doc)} className="text-3xl hover:scale-110 transition-transform" aria-label="Open">
@@ -207,11 +293,22 @@ export default function DocumentsPage() {
                       rows={1}
                       className="mt-1 w-full text-sm text-grey-soft bg-transparent resize-none focus:outline-none placeholder:text-grey-soft/50"
                     />
-                    <div className="text-xs text-grey-soft mt-1">
-                      {formatSize(doc.size_bytes)}
-                      {doc.size_bytes && ' · '}
-                      {new Date(doc.created_at).toLocaleDateString()}
-                      {doc.uploaded_by_email && ` · ${doc.uploaded_by_email.split('@')[0]}`}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <select
+                        value={doc.folder || ''}
+                        onChange={(e) => handleFolderChange(doc, e.target.value)}
+                        className="text-xs px-2 py-1 rounded-full border border-grey-soft/30 bg-cream/40 text-charcoal focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+                      >
+                        <option value="">📂 Unfiled</option>
+                        {folders.map(f => <option key={f} value={f}>📁 {f}</option>)}
+                        <option value="__new__">+ New folder...</option>
+                      </select>
+                      <span className="text-xs text-grey-soft">
+                        {formatSize(doc.size_bytes)}
+                        {doc.size_bytes && ' · '}
+                        {new Date(doc.created_at).toLocaleDateString()}
+                        {doc.uploaded_by_email && ` · ${doc.uploaded_by_email.split('@')[0]}`}
+                      </span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
