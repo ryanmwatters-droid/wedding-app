@@ -668,7 +668,11 @@ export default function VenueListPage() {
                       </div>
                     )}
 
-                    {v.notes && <div className="text-xs text-grey-soft italic mt-2 line-clamp-2">{v.notes}</div>}
+                    {v.notes && (
+                      <div className="mt-3 px-3 py-2 bg-cream/60 rounded-lg border-l-2 border-rose-accent/40">
+                        <p className="text-sm text-charcoal/85 italic leading-relaxed whitespace-pre-wrap">{v.notes}</p>
+                      </div>
+                    )}
                   </SortableVenueRow>
                 ))}
               </div>
