@@ -156,11 +156,14 @@ function VenueDocuments({ venueId, sessionUserId, sessionEmail }: {
   }
 
   const openDoc = async (doc: Document) => {
+    const win = window.open('', '_blank')
     try {
       const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 60 * 60)
       if (error) throw error
-      window.open(data.signedUrl, '_blank')
+      if (win) win.location.href = data.signedUrl
+      else window.location.href = data.signedUrl
     } catch (err) {
+      if (win) win.close()
       console.error('Open failed:', err)
       setError('Failed to open file.')
     }
@@ -365,11 +368,14 @@ export default function VenueListPage() {
   }, [allDocs])
 
   const openDocFromCard = async (doc: Document) => {
+    const win = window.open('', '_blank')
     try {
       const { data, error } = await supabase.storage.from('documents').createSignedUrl(doc.storage_path, 60 * 60)
       if (error) throw error
-      window.open(data.signedUrl, '_blank')
+      if (win) win.location.href = data.signedUrl
+      else window.location.href = data.signedUrl
     } catch (err) {
+      if (win) win.close()
       console.error('Open failed:', err)
       setError('Failed to open file.')
     }
