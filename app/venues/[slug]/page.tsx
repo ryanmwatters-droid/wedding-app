@@ -181,6 +181,18 @@ function VenueDocuments({ venueId, sessionUserId, sessionEmail }: {
     }
   }
 
+  const renameDoc = async (id: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, display_name: trimmed } : d))
+    try {
+      await supabase.from('documents').update({ display_name: trimmed }).eq('id', id)
+    } catch (err) {
+      console.error('Rename failed:', err)
+      setError('Failed to rename.')
+    }
+  }
+
   return (
     <div className="mt-4 pt-4 border-t border-grey-soft/15">
       <div className="text-xs text-grey-soft mb-2">Documents</div>
@@ -193,12 +205,14 @@ function VenueDocuments({ venueId, sessionUserId, sessionEmail }: {
         <div className="mt-3 space-y-1">
           {docs.map(doc => (
             <div key={doc.id} className="flex items-center gap-2 p-2 bg-cream/40 rounded-lg text-sm">
-              <button onClick={() => openDoc(doc)} className="text-lg" aria-label="Open">{fileIcon(doc.mime_type)}</button>
-              <button onClick={() => openDoc(doc)} className="flex-1 min-w-0 text-left text-charcoal hover:text-sage-primary truncate">
-                {doc.display_name}
-                <span className="text-grey-soft ml-2 text-xs">{formatSize(doc.size_bytes)}</span>
-              </button>
-              <button onClick={() => deleteDoc(doc)} className="text-grey-soft hover:text-red-500 text-xs px-1">×</button>
+              <button onClick={() => openDoc(doc)} className="text-lg shrink-0" aria-label="Open">{fileIcon(doc.mime_type)}</button>
+              <input
+                defaultValue={doc.display_name}
+                onBlur={(e) => { if (e.target.value.trim() !== doc.display_name) renameDoc(doc.id, e.target.value) }}
+                className="flex-1 min-w-0 bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none text-charcoal px-1 py-0.5"
+              />
+              <span className="text-grey-soft text-xs whitespace-nowrap shrink-0">{formatSize(doc.size_bytes)}</span>
+              <button onClick={() => deleteDoc(doc)} className="text-grey-soft hover:text-red-500 text-xs px-1 shrink-0">×</button>
             </div>
           ))}
         </div>
