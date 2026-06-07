@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { EventVenue } from '@/lib/types'
 
-const ENGAGEMENT_PARTY = new Date('2026-06-20T18:30:00-05:00')
+const ENGAGEMENT_PARTY = new Date('2026-08-29T18:00:00-05:00')
 
 function CountdownBanner() {
   const [now, setNow] = useState(() => new Date())
@@ -32,7 +32,7 @@ function CountdownBanner() {
         {past ? 'Engagement Party — today!' : big}
       </div>
       <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
-        {past ? 'June 20 · 6:30 PM Central' : 'until our engagement party · June 20 · 6:30 PM CT'}
+        {past ? 'August 29 · 6:00 PM Central' : 'until our engagement party · August 29 · 6:00 PM CT'}
       </div>
     </div>
   )
