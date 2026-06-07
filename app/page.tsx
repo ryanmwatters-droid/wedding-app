@@ -219,7 +219,7 @@ export default function HomePage() {
               {weddingBooked?.venue_name || (weddingVenues.length > 0 ? `${weddingVenues.length} ${weddingVenues.length === 1 ? 'candidate' : 'candidates'}` : 'Not chosen yet')}
             </p>
             <div className="text-xs text-grey-soft truncate">
-              {weddingBooked?.event_date ? new Date(weddingBooked.event_date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : weddingBooked?.venue_address || (weddingVenues.length > 0 ? 'Tap to compare →' : 'Tap to add →')}
+              {weddingBooked?.event_date ? new Date(weddingBooked.event_date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : weddingBooked?.venue_address || (weddingVenues.length > 0 ? 'Tap to compare →' : 'Tap to add →')}
             </div>
           </Link>
 
