@@ -41,8 +41,8 @@ function CountdownBanner() {
 export default function HomePage() {
   const { session, logout } = useAuth()
   const [taskStats, setTaskStats] = useState({ total: 0, completed: 0 })
-  const [guestStats, setGuestStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
-  const [engagementStats, setEngagementStats] = useState({ total: 0, sent: 0, received: 0, attending: 0 })
+  const [guestStats, setGuestStats] = useState({ total: 0, sent: 0, received: 0, attending: 0, declined: 0 })
+  const [engagementStats, setEngagementStats] = useState({ total: 0, sent: 0, received: 0, attending: 0, declined: 0 })
   const [docCount, setDocCount] = useState(0)
   const [budget, setBudget] = useState({ allocated: 0, spent: 0 })
   const [vendorStats, setVendorStats] = useState({ total: 0, booked: 0 })
@@ -89,7 +89,8 @@ export default function HomePage() {
           total: engagementRes.data.reduce((sum, g) => sum + (g.party_size || 1), 0),
           sent: engagementRes.data.filter(g => g.invitation_sent).length,
           received: engagementRes.data.filter(g => g.rsvp_received).length,
-          attending: engagementRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
+          attending: engagementRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0),
+          declined: engagementRes.data.filter(g => g.rsvp_received && !g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
         })
       }
 
@@ -105,7 +106,8 @@ export default function HomePage() {
           total: guestsRes.data.reduce((sum, g) => sum + (g.party_size || 1), 0),
           sent: guestsRes.data.filter(g => g.invitation_sent).length,
           received: guestsRes.data.filter(g => g.rsvp_received).length,
-          attending: guestsRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
+          attending: guestsRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0),
+          declined: guestsRes.data.filter(g => g.rsvp_received && !g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
         })
       }
 
@@ -243,7 +245,7 @@ export default function HomePage() {
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
             <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
-            <div className="grid grid-cols-3 gap-1 text-center">
+            <div className="grid grid-cols-4 gap-1 text-center">
               <div>
                 <div className="text-base font-medium text-charcoal">{guestStats.total}</div>
                 <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
@@ -256,6 +258,10 @@ export default function HomePage() {
                 <div className="text-base font-medium text-sage-primary">{guestStats.attending}</div>
                 <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
               </div>
+              <div>
+                <div className="text-base font-medium text-dusty-blue">{guestStats.declined}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">No</div>
+              </div>
             </div>
           </Link>
 
@@ -265,7 +271,7 @@ export default function HomePage() {
             </div>
             <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
             <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
-            <div className="grid grid-cols-3 gap-1 text-center">
+            <div className="grid grid-cols-4 gap-1 text-center">
               <div>
                 <div className="text-base font-medium text-charcoal">{engagementStats.total}</div>
                 <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
@@ -277,6 +283,10 @@ export default function HomePage() {
               <div>
                 <div className="text-base font-medium text-sage-primary">{engagementStats.attending}</div>
                 <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
+              </div>
+              <div>
+                <div className="text-base font-medium text-dusty-blue">{engagementStats.declined}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider">No</div>
               </div>
             </div>
           </Link>
