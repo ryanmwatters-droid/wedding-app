@@ -131,6 +131,7 @@ export interface Countdown {
   id: string
   title: string
   target_date: string
+  color: string | null
   created_by: string | null
   created_at: string
 }

@@ -43,6 +43,18 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const COUNTDOWN_COLORS: { name: string; hex: string }[] = [
+  { name: 'Dusty Rose', hex: '#B08585' },
+  { name: 'Dusty Blue', hex: '#7B8AA8' },
+  { name: 'Sage', hex: '#7B8A78' },
+  { name: 'Forest', hex: '#4A5D4A' },
+  { name: 'Terracotta', hex: '#BD7A5E' },
+  { name: 'Honey', hex: '#C2A35B' },
+  { name: 'Mauve', hex: '#9A7B96' },
+  { name: 'Slate', hex: '#6B7B82' },
+]
+const DEFAULT_COUNTDOWN_COLOR = '#7B8AA8'
+
 function CustomCountdowns() {
   const { session } = useAuth()
   const [items, setItems] = useState<Countdown[]>([])
@@ -51,6 +63,7 @@ function CustomCountdowns() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [when, setWhen] = useState('')
+  const [color, setColor] = useState(DEFAULT_COUNTDOWN_COLOR)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -85,11 +98,12 @@ function CustomCountdowns() {
 
   const sorted = [...items].sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime())
 
-  const openAdd = () => { setEditingId(null); setTitle(''); setWhen(''); setError(''); setShowForm(true) }
+  const openAdd = () => { setEditingId(null); setTitle(''); setWhen(''); setColor(DEFAULT_COUNTDOWN_COLOR); setError(''); setShowForm(true) }
   const openEdit = (c: Countdown) => {
     setEditingId(c.id)
     setTitle(c.title)
     setWhen(toLocalInput(new Date(c.target_date)))
+    setColor(c.color || DEFAULT_COUNTDOWN_COLOR)
     setError('')
     setShowForm(true)
   }
@@ -101,15 +115,15 @@ function CustomCountdowns() {
     const name = title.trim()
 
     if (editingId) {
-      setItems(prev => prev.map(c => c.id === editingId ? { ...c, title: name, target_date: target } : c))
+      setItems(prev => prev.map(c => c.id === editingId ? { ...c, title: name, target_date: target, color } : c))
       setShowForm(false)
-      const { error } = await supabase.from('countdowns').update({ title: name, target_date: target }).eq('id', editingId)
+      const { error } = await supabase.from('countdowns').update({ title: name, target_date: target, color }).eq('id', editingId)
       if (error) { console.error(error); setError('Failed to save.') }
     } else {
       setShowForm(false)
       const { data, error } = await supabase
         .from('countdowns')
-        .insert({ title: name, target_date: target, created_by: session?.user.id })
+        .insert({ title: name, target_date: target, color, created_by: session?.user.id })
         .select()
         .single()
       if (error) { console.error(error); setError('Failed to add.') }
@@ -134,13 +148,18 @@ function CustomCountdowns() {
         const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
         const big = past ? '✿' : days >= 1 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`
         const dateLabel = target.toLocaleString([], { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        const accent = c.color || DEFAULT_COUNTDOWN_COLOR
         return (
-          <div key={c.id} className="relative bg-dusty-blue/10 border border-dusty-blue/20 rounded-2xl p-4 mb-4 text-center">
+          <div
+            key={c.id}
+            style={{ backgroundColor: `${accent}1A`, borderColor: `${accent}33` }}
+            className="relative border rounded-2xl p-4 mb-4 text-center"
+          >
             <div className="absolute top-2 right-2 flex gap-1">
               <button onClick={() => openEdit(c)} className="text-sm text-grey-soft hover:text-charcoal px-1" aria-label="Edit countdown">✎</button>
               <button onClick={() => remove(c.id)} className="text-sm text-grey-soft hover:text-red-500 px-1" aria-label="Delete countdown">×</button>
             </div>
-            <div className="text-2xl font-serif text-dusty-blue">{past ? `${c.title} — today!` : big}</div>
+            <div className="text-2xl font-serif" style={{ color: accent }}>{past ? `${c.title} — today!` : big}</div>
             <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
               {past ? dateLabel : `until ${c.title} · ${dateLabel}`}
             </div>
@@ -163,6 +182,19 @@ function CustomCountdowns() {
             onChange={(e) => setWhen(e.target.value)}
             className="w-full px-3 py-2 border border-grey-soft/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
           />
+          <div className="flex flex-wrap gap-2 justify-center py-1">
+            {COUNTDOWN_COLORS.map(col => (
+              <button
+                key={col.hex}
+                type="button"
+                onClick={() => setColor(col.hex)}
+                aria-label={col.name}
+                title={col.name}
+                style={{ backgroundColor: col.hex }}
+                className={`w-7 h-7 rounded-full transition-transform ${color === col.hex ? 'ring-2 ring-offset-2 ring-charcoal scale-110' : 'hover:scale-105'}`}
+              />
+            ))}
+          </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={() => setShowForm(false)} className="px-3 py-2 text-sm text-grey-soft hover:text-charcoal">Cancel</button>
             <button type="submit" disabled={!title.trim() || !when} className="px-4 py-2 text-sm bg-sage-primary text-white rounded-xl disabled:opacity-50 hover:bg-sage-primary/90 transition-colors">
@@ -383,54 +415,54 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <Link href="/guests" className="col-span-2 block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+          <Link href="/guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
-              <span className="text-xs text-grey-soft italic">Invitations & RSVPs</span>
             </div>
-            <h3 className="text-xl font-serif text-charcoal mb-4">Guest List</h3>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
+            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
+            <div className="grid grid-cols-4 gap-1 text-center">
               <div>
-                <div className="text-lg font-medium text-charcoal">{guestStats.total}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">Invited</div>
+                <div className="text-base font-medium text-charcoal">{guestStats.total}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">I</span><span className="hidden sm:inline">Invited</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-rose-accent">{guestStats.received}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">RSVP'd</div>
+                <div className="text-base font-medium text-rose-accent">{guestStats.received}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">R</span><span className="hidden sm:inline">RSVP&apos;d</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-sage-primary">{guestStats.attending}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">Yes</div>
+                <div className="text-base font-medium text-sage-primary">{guestStats.attending}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">Y</span><span className="hidden sm:inline">Yes</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-dusty-blue">{guestStats.declined}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">No</div>
+                <div className="text-base font-medium text-dusty-blue">{guestStats.declined}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">N</span><span className="hidden sm:inline">No</span></div>
               </div>
             </div>
           </Link>
 
-          <Link href="/engagement-guests" className="col-span-2 block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+          <Link href="/engagement-guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
-              <span className="text-xs text-grey-soft italic">Invitations & RSVPs</span>
             </div>
-            <h3 className="text-xl font-serif text-charcoal mb-4">Guest List</h3>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
+            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
+            <div className="grid grid-cols-4 gap-1 text-center">
               <div>
-                <div className="text-lg font-medium text-charcoal">{engagementStats.total}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">Invited</div>
+                <div className="text-base font-medium text-charcoal">{engagementStats.total}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">I</span><span className="hidden sm:inline">Invited</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-rose-accent">{engagementStats.received}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">RSVP'd</div>
+                <div className="text-base font-medium text-rose-accent">{engagementStats.received}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">R</span><span className="hidden sm:inline">RSVP&apos;d</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-sage-primary">{engagementStats.attending}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">Yes</div>
+                <div className="text-base font-medium text-sage-primary">{engagementStats.attending}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">Y</span><span className="hidden sm:inline">Yes</span></div>
               </div>
               <div>
-                <div className="text-lg font-medium text-dusty-blue">{engagementStats.declined}</div>
-                <div className="text-xs text-grey-soft uppercase tracking-wider">No</div>
+                <div className="text-base font-medium text-dusty-blue">{engagementStats.declined}</div>
+                <div className="text-[10px] text-grey-soft uppercase tracking-wider"><span className="sm:hidden">N</span><span className="hidden sm:inline">No</span></div>
               </div>
             </div>
           </Link>

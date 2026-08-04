@@ -5,6 +5,7 @@ CREATE TABLE countdowns (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   title TEXT NOT NULL,
   target_date TIMESTAMPTZ NOT NULL,
+  color TEXT NOT NULL DEFAULT '#7B8AA8',
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT now()
 );
