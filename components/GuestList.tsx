@@ -265,9 +265,9 @@ export function GuestList({ tableName, title, importFromTable }: {
 
   const totalInvited = guests.reduce((s, g) => s + (g.party_size || 1), 0)
   const sent = guests.filter(g => g.invitation_sent).length
-  const received = guests.filter(g => g.rsvp_received).length
+  const received = guests.filter(g => g.rsvp_received).reduce((s, g) => s + (g.party_size || 1), 0)
   const attending = guests.filter(g => g.attending).reduce((s, g) => s + (g.party_size || 1), 0)
-  const declined = guests.filter(g => g.attending === false).length
+  const declined = guests.filter(g => g.attending === false).reduce((s, g) => s + (g.party_size || 1), 0)
 
   const selectedGuest = guests.find(g => g.id === selectedId) || null
   const existingNames = new Set(guests.map(g => g.name.toLowerCase()))

@@ -127,6 +127,14 @@ export interface Guest {
   notes: string | null
 }
 
+export interface Countdown {
+  id: string
+  title: string
+  target_date: string
+  created_by: string | null
+  created_at: string
+}
+
 export interface Task {
   id: string
   phase: string

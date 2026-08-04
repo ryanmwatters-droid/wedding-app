@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
-import { EventVenue } from '@/lib/types'
+import { EventVenue, Countdown } from '@/lib/types'
 
 const ENGAGEMENT_PARTY = new Date('2026-08-29T18:00:00-05:00')
 
@@ -34,6 +34,149 @@ function CountdownBanner() {
       <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
         {past ? 'August 29 · 6:00 PM Central' : 'until our engagement party · August 29 · 6:00 PM CT'}
       </div>
+    </div>
+  )
+}
+
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function CustomCountdowns() {
+  const { session } = useAuth()
+  const [items, setItems] = useState<Countdown[]>([])
+  const [now, setNow] = useState(() => new Date())
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [when, setWhen] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
+    if (!session) return
+
+    const load = async () => {
+      const { data, error } = await supabase.from('countdowns').select('*').order('target_date')
+      if (!error) setItems(data || [])
+    }
+    load()
+
+    const channel = supabase
+      .channel('countdowns-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'countdowns' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setItems(prev => prev.some(c => c.id === payload.new.id) ? prev : [...prev, payload.new as Countdown])
+        } else if (payload.eventType === 'UPDATE') {
+          setItems(prev => prev.map(c => c.id === payload.new.id ? payload.new as Countdown : c))
+        } else if (payload.eventType === 'DELETE') {
+          setItems(prev => prev.filter(c => c.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    return () => { channel.unsubscribe() }
+  }, [session])
+
+  const sorted = [...items].sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime())
+
+  const openAdd = () => { setEditingId(null); setTitle(''); setWhen(''); setError(''); setShowForm(true) }
+  const openEdit = (c: Countdown) => {
+    setEditingId(c.id)
+    setTitle(c.title)
+    setWhen(toLocalInput(new Date(c.target_date)))
+    setError('')
+    setShowForm(true)
+  }
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim() || !when) return
+    const target = new Date(when).toISOString()
+    const name = title.trim()
+
+    if (editingId) {
+      setItems(prev => prev.map(c => c.id === editingId ? { ...c, title: name, target_date: target } : c))
+      setShowForm(false)
+      const { error } = await supabase.from('countdowns').update({ title: name, target_date: target }).eq('id', editingId)
+      if (error) { console.error(error); setError('Failed to save.') }
+    } else {
+      setShowForm(false)
+      const { data, error } = await supabase
+        .from('countdowns')
+        .insert({ title: name, target_date: target, created_by: session?.user.id })
+        .select()
+        .single()
+      if (error) { console.error(error); setError('Failed to add.') }
+      else setItems(prev => prev.some(c => c.id === data.id) ? prev : [...prev, data as Countdown])
+    }
+  }
+
+  const remove = async (id: string) => {
+    if (!confirm('Delete this countdown?')) return
+    setItems(prev => prev.filter(c => c.id !== id))
+    const { error } = await supabase.from('countdowns').delete().eq('id', id)
+    if (error) { console.error(error); setError('Failed to delete.') }
+  }
+
+  return (
+    <div>
+      {sorted.map(c => {
+        const target = new Date(c.target_date)
+        const ms = target.getTime() - now.getTime()
+        const past = ms <= 0
+        const days = Math.floor(ms / (1000 * 60 * 60 * 24))
+        const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
+        const big = past ? '✿' : days >= 1 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+        const dateLabel = target.toLocaleString([], { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+        return (
+          <div key={c.id} className="relative bg-dusty-blue/10 border border-dusty-blue/20 rounded-2xl p-4 mb-4 text-center">
+            <div className="absolute top-2 right-2 flex gap-1">
+              <button onClick={() => openEdit(c)} className="text-sm text-grey-soft hover:text-charcoal px-1" aria-label="Edit countdown">✎</button>
+              <button onClick={() => remove(c.id)} className="text-sm text-grey-soft hover:text-red-500 px-1" aria-label="Delete countdown">×</button>
+            </div>
+            <div className="text-2xl font-serif text-dusty-blue">{past ? `${c.title} — today!` : big}</div>
+            <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
+              {past ? dateLabel : `until ${c.title} · ${dateLabel}`}
+            </div>
+          </div>
+        )
+      })}
+
+      {showForm ? (
+        <form onSubmit={save} className="bg-white border border-grey-soft/20 rounded-2xl p-4 mb-4 space-y-2">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="What are we counting down to? (e.g. Engagement photos)"
+            className="w-full px-3 py-2 border border-grey-soft/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
+            autoFocus
+          />
+          <input
+            type="datetime-local"
+            value={when}
+            onChange={(e) => setWhen(e.target.value)}
+            className="w-full px-3 py-2 border border-grey-soft/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage-primary/20 focus:border-sage-primary"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => setShowForm(false)} className="px-3 py-2 text-sm text-grey-soft hover:text-charcoal">Cancel</button>
+            <button type="submit" disabled={!title.trim() || !when} className="px-4 py-2 text-sm bg-sage-primary text-white rounded-xl disabled:opacity-50 hover:bg-sage-primary/90 transition-colors">
+              {editingId ? 'Save' : 'Add countdown'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button onClick={openAdd} className="w-full mb-4 px-4 py-2 text-sm text-dusty-blue border border-dusty-blue/30 hover:bg-dusty-blue/5 rounded-2xl transition-colors">
+          + Add another countdown
+        </button>
+      )}
+
+      {error && <div className="text-xs text-red-500 mb-2 text-center">{error}</div>}
     </div>
   )
 }
@@ -88,7 +231,7 @@ export default function HomePage() {
         setEngagementStats({
           total: engagementRes.data.reduce((sum, g) => sum + (g.party_size || 1), 0),
           sent: engagementRes.data.filter(g => g.invitation_sent).length,
-          received: engagementRes.data.filter(g => g.rsvp_received).length,
+          received: engagementRes.data.filter(g => g.rsvp_received).reduce((sum, g) => sum + (g.party_size || 1), 0),
           attending: engagementRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0),
           declined: engagementRes.data.filter(g => g.rsvp_received && !g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
         })
@@ -105,7 +248,7 @@ export default function HomePage() {
         setGuestStats({
           total: guestsRes.data.reduce((sum, g) => sum + (g.party_size || 1), 0),
           sent: guestsRes.data.filter(g => g.invitation_sent).length,
-          received: guestsRes.data.filter(g => g.rsvp_received).length,
+          received: guestsRes.data.filter(g => g.rsvp_received).reduce((sum, g) => sum + (g.party_size || 1), 0),
           attending: guestsRes.data.filter(g => g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0),
           declined: guestsRes.data.filter(g => g.rsvp_received && !g.attending).reduce((sum, g) => sum + (g.party_size || 1), 0)
         })
@@ -161,6 +304,7 @@ export default function HomePage() {
         )}
 
         <CountdownBanner />
+        <CustomCountdowns />
 
         <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-4 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
           <div className="flex justify-between items-start gap-3">
@@ -239,54 +383,54 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <Link href="/guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+          <Link href="/guests" className="col-span-2 block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Wedding</span>
+              <span className="text-xs text-grey-soft italic">Invitations & RSVPs</span>
             </div>
-            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
-            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
-            <div className="grid grid-cols-4 gap-1 text-center">
+            <h3 className="text-xl font-serif text-charcoal mb-4">Guest List</h3>
+            <div className="grid grid-cols-4 gap-2 text-center">
               <div>
-                <div className="text-base font-medium text-charcoal">{guestStats.total}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
+                <div className="text-lg font-medium text-charcoal">{guestStats.total}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">Invited</div>
               </div>
               <div>
-                <div className="text-base font-medium text-rose-accent">{guestStats.received}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">RSVP'd</div>
+                <div className="text-lg font-medium text-rose-accent">{guestStats.received}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">RSVP'd</div>
               </div>
               <div>
-                <div className="text-base font-medium text-sage-primary">{guestStats.attending}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
+                <div className="text-lg font-medium text-sage-primary">{guestStats.attending}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">Yes</div>
               </div>
               <div>
-                <div className="text-base font-medium text-dusty-blue">{guestStats.declined}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">No</div>
+                <div className="text-lg font-medium text-dusty-blue">{guestStats.declined}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">No</div>
               </div>
             </div>
           </Link>
 
-          <Link href="/engagement-guests" className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
+          <Link href="/engagement-guests" className="col-span-2 block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-rose-accent/40 hover:shadow-sm transition-all">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs uppercase tracking-wider text-grey-soft">Engagement</span>
+              <span className="text-xs text-grey-soft italic">Invitations & RSVPs</span>
             </div>
-            <h3 className="text-xl font-serif text-charcoal mb-1">Guest List</h3>
-            <p className="text-xs text-grey-soft italic mb-4">Invitations & RSVPs</p>
-            <div className="grid grid-cols-4 gap-1 text-center">
+            <h3 className="text-xl font-serif text-charcoal mb-4">Guest List</h3>
+            <div className="grid grid-cols-4 gap-2 text-center">
               <div>
-                <div className="text-base font-medium text-charcoal">{engagementStats.total}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Invited</div>
+                <div className="text-lg font-medium text-charcoal">{engagementStats.total}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">Invited</div>
               </div>
               <div>
-                <div className="text-base font-medium text-rose-accent">{engagementStats.received}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">RSVP'd</div>
+                <div className="text-lg font-medium text-rose-accent">{engagementStats.received}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">RSVP'd</div>
               </div>
               <div>
-                <div className="text-base font-medium text-sage-primary">{engagementStats.attending}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">Yes</div>
+                <div className="text-lg font-medium text-sage-primary">{engagementStats.attending}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">Yes</div>
               </div>
               <div>
-                <div className="text-base font-medium text-dusty-blue">{engagementStats.declined}</div>
-                <div className="text-[10px] text-grey-soft uppercase tracking-wider">No</div>
+                <div className="text-lg font-medium text-dusty-blue">{engagementStats.declined}</div>
+                <div className="text-xs text-grey-soft uppercase tracking-wider">No</div>
               </div>
             </div>
           </Link>
