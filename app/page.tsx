@@ -459,6 +459,17 @@ export default function HomePage() {
             </div>
           </Link>
         </div>
+
+        <a
+          href="https://clients.foxandivory.com/portal"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 flex items-center justify-center gap-2 bg-rose-accent/5 rounded-2xl p-4 border border-rose-accent/20 hover:bg-rose-accent/10 hover:border-rose-accent/40 transition-all"
+        >
+          <span className="text-xl">📸</span>
+          <span className="text-sm font-medium text-charcoal">Our Photographer&rsquo;s Portal</span>
+          <span className="text-xs text-rose-accent">Fox &amp; Ivory ↗</span>
+        </a>
       </div>
     </div>
   )

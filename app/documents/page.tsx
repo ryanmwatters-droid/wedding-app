@@ -179,6 +179,21 @@ export default function DocumentsPage() {
     setCurrentFolder(trimmed)
   }
 
+  // Rename a folder by relabeling every file inside it. Renaming onto an existing folder merges them.
+  const renameFolder = async (oldName: string, value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed || trimmed === oldName) return
+    setDocs(prev => prev.map(d => d.folder === oldName ? { ...d, folder: trimmed } : d))
+    if (currentFolder === oldName) setCurrentFolder(trimmed)
+    try {
+      const { error } = await supabase.from('documents').update({ folder: trimmed }).eq('folder', oldName)
+      if (error) throw error
+    } catch (err) {
+      console.error('Rename folder failed:', err)
+      setError('Failed to rename folder.')
+    }
+  }
+
   // Remove the folder label from every file inside it — files move to Unfiled, nothing is deleted.
   const emptyFolder = async (folder: string) => {
     setDocs(prev => prev.map(d => d.folder === folder ? { ...d, folder: null } : d))
@@ -233,11 +248,20 @@ export default function DocumentsPage() {
             <button onClick={() => setCurrentFolder(null)} className="text-sm text-grey-soft hover:text-charcoal transition-colors">
               ← All documents
             </button>
-            <div className="flex items-center justify-between mt-1">
-              <h2 className="text-xl font-serif text-charcoal">📁 {currentFolder}</h2>
+            <div className="flex items-center justify-between mt-1 gap-2">
+              <div className="flex items-center gap-1 flex-1 min-w-0">
+                <span className="text-xl">📁</span>
+                <input
+                  key={currentFolder}
+                  defaultValue={currentFolder}
+                  onBlur={(e) => renameFolder(currentFolder, e.target.value)}
+                  aria-label="Folder name"
+                  className="flex-1 min-w-0 text-xl font-serif text-charcoal bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none"
+                />
+              </div>
               <button
                 onClick={() => setFolderToDelete(currentFolder)}
-                className="text-xs px-2 py-1 text-grey-soft hover:text-red-500 transition-colors"
+                className="text-xs px-2 py-1 text-grey-soft hover:text-red-500 transition-colors whitespace-nowrap"
               >
                 Delete folder
               </button>

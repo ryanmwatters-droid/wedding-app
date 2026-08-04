@@ -60,6 +60,24 @@ export default function VendorsOverview() {
     }
   }
 
+  const deleteCategory = async (cat: VendorCategory) => {
+    const count = vendors.filter(v => v.category_id === cat.id).length
+    const msg = count > 0
+      ? `Delete "${cat.name}" and its ${count} ${count === 1 ? 'vendor' : 'vendors'}? This can't be undone.`
+      : `Delete "${cat.name}"?`
+    if (!confirm(msg)) return
+    setCategories(prev => prev.filter(c => c.id !== cat.id))
+    setVendors(prev => prev.filter(v => v.category_id !== cat.id))
+    try {
+      await supabase.from('vendors').delete().eq('category_id', cat.id)
+      const { error } = await supabase.from('vendor_categories').delete().eq('id', cat.id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Delete category failed:', err)
+      setError('Failed to delete category.')
+    }
+  }
+
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
   if (loading) return (
     <div className="min-h-screen bg-cream flex items-center justify-center">
@@ -117,20 +135,28 @@ export default function VendorsOverview() {
             const booked = catVendors.filter(v => v.status === 'Booked').length
             const isComplete = booked > 0
             return (
-              <Link
-                key={cat.id}
-                href={`/vendors/${cat.id}`}
-                className="block bg-white rounded-2xl p-5 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-serif text-charcoal">{cat.name}</h3>
-                  {isComplete && <span className="text-sage-primary text-sm">✓</span>}
-                </div>
-                <div className="text-sm text-grey-soft">
-                  {catVendors.length === 0 ? 'No vendors yet' : `${catVendors.length} ${catVendors.length === 1 ? 'vendor' : 'vendors'}`}
-                  {booked > 0 && ` · ${booked} booked`}
-                </div>
-              </Link>
+              <div key={cat.id} className="relative">
+                <Link
+                  href={`/vendors/${cat.id}`}
+                  className="block bg-white rounded-2xl p-5 pr-9 border border-grey-soft/20 hover:border-sage-primary/40 hover:shadow-sm transition-all"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-lg font-serif text-charcoal">{cat.name}</h3>
+                    {isComplete && <span className="text-sage-primary text-sm">✓</span>}
+                  </div>
+                  <div className="text-sm text-grey-soft">
+                    {catVendors.length === 0 ? 'No vendors yet' : `${catVendors.length} ${catVendors.length === 1 ? 'vendor' : 'vendors'}`}
+                    {booked > 0 && ` · ${booked} booked`}
+                  </div>
+                </Link>
+                <button
+                  onClick={() => deleteCategory(cat)}
+                  aria-label={`Delete ${cat.name}`}
+                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-grey-soft hover:text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
             )
           })}
         </div>

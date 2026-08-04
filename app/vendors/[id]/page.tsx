@@ -486,6 +486,37 @@ export default function VendorCategoryDetail() {
     }
   }
 
+  const renameCategory = async (value: string) => {
+    const trimmed = value.trim()
+    if (!category || !trimmed || trimmed === category.name) return
+    setCategory({ ...category, name: trimmed })
+    try {
+      const { error } = await supabase.from('vendor_categories').update({ name: trimmed }).eq('id', category.id)
+      if (error) throw error
+    } catch (err) {
+      console.error('Rename category failed:', err)
+      setError('Failed to rename category.')
+    }
+  }
+
+  const deleteCategory = async () => {
+    if (!category) return
+    const count = vendors.length
+    const msg = count > 0
+      ? `Delete "${category.name}" and its ${count} ${count === 1 ? 'vendor' : 'vendors'}? This can't be undone.`
+      : `Delete "${category.name}"?`
+    if (!confirm(msg)) return
+    try {
+      await supabase.from('vendors').delete().eq('category_id', category.id)
+      const { error } = await supabase.from('vendor_categories').delete().eq('id', category.id)
+      if (error) throw error
+      router.push('/vendors')
+    } catch (err) {
+      console.error('Delete category failed:', err)
+      setError('Failed to delete category.')
+    }
+  }
+
   const deleteVendor = async (id: string) => {
     setVendors(prev => prev.filter(v => v.id !== id))
     try {
@@ -524,7 +555,18 @@ export default function VendorCategoryDetail() {
           </div>
         )}
 
-        <h1 className="text-3xl font-serif text-charcoal mb-6">{category.name}</h1>
+        <div className="flex items-center justify-between gap-2 mb-6">
+          <input
+            key={category.id}
+            defaultValue={category.name}
+            onBlur={(e) => renameCategory(e.target.value)}
+            aria-label="Category name"
+            className="flex-1 min-w-0 text-3xl font-serif text-charcoal bg-transparent border-b border-transparent hover:border-grey-soft/30 focus:border-sage-primary focus:outline-none"
+          />
+          <button onClick={deleteCategory} className="text-xs text-grey-soft hover:text-red-500 transition-colors whitespace-nowrap">
+            Delete category
+          </button>
+        </div>
 
         <form onSubmit={addVendor} className="bg-white rounded-2xl p-4 mb-6 border border-grey-soft/20 flex gap-2">
           <input
