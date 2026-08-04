@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/lib/useAuth'
 import { EventVenue, Countdown } from '@/lib/types'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const ENGAGEMENT_PARTY = new Date('2026-08-29T18:00:00-05:00')
 
@@ -55,6 +58,61 @@ const COUNTDOWN_COLORS: { name: string; hex: string }[] = [
 ]
 const DEFAULT_COUNTDOWN_COLOR = '#7B8AA8'
 
+function SortableCountdown({ c, now, spanFull, onEdit, onDelete }: {
+  c: Countdown
+  now: Date
+  spanFull: boolean
+  onEdit: (c: Countdown) => void
+  onDelete: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: c.id })
+  const target = new Date(c.target_date)
+  const ms = target.getTime() - now.getTime()
+  const past = ms <= 0
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
+  const big = past ? '✿' : days >= 1 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  const dateLabel = target.toLocaleString([], { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  const accent = c.color || DEFAULT_COUNTDOWN_COLOR
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    backgroundColor: `${accent}1A`,
+    borderColor: `${accent}33`,
+  }
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative border rounded-2xl text-center ${spanFull ? 'col-span-2 px-4 pt-6 pb-4' : 'px-3 pt-6 pb-3'}`}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        aria-label="Drag to reorder"
+        className="absolute top-2 left-2 text-grey-soft/40 hover:text-grey-soft cursor-grab active:cursor-grabbing touch-none"
+      >
+        <svg width="12" height="18" viewBox="0 0 14 20" fill="currentColor">
+          <circle cx="4" cy="5" r="1.5" /><circle cx="10" cy="5" r="1.5" />
+          <circle cx="4" cy="10" r="1.5" /><circle cx="10" cy="10" r="1.5" />
+          <circle cx="4" cy="15" r="1.5" /><circle cx="10" cy="15" r="1.5" />
+        </svg>
+      </button>
+      <div className="absolute top-2 right-2 flex gap-1">
+        <button onClick={() => onEdit(c)} className="text-sm text-grey-soft hover:text-charcoal px-1" aria-label="Edit countdown">✎</button>
+        <button onClick={() => onDelete(c.id)} className="text-sm text-grey-soft hover:text-red-500 px-1" aria-label="Delete countdown">×</button>
+      </div>
+      <div className={`font-serif ${spanFull ? 'text-3xl' : 'text-2xl'}`} style={{ color: accent }}>
+        {past ? `${c.title} — today!` : big}
+      </div>
+      <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
+        {past ? dateLabel : `until ${c.title} · ${dateLabel}`}
+      </div>
+    </div>
+  )
+}
+
 function CustomCountdowns() {
   const { session } = useAuth()
   const [items, setItems] = useState<Countdown[]>([])
@@ -96,7 +154,15 @@ function CustomCountdowns() {
     return () => { channel.unsubscribe() }
   }, [session])
 
-  const sorted = [...items].sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime())
+  // Manual order (sort_order asc) wins; rows without one fall back to newest-created first.
+  const sorted = [...items].sort((a, b) => {
+    const ao = a.sort_order
+    const bo = b.sort_order
+    if (ao != null && bo != null) return ao - bo
+    if (ao != null) return -1
+    if (bo != null) return 1
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
 
   const openAdd = () => { setEditingId(null); setTitle(''); setWhen(''); setColor(DEFAULT_COUNTDOWN_COLOR); setError(''); setShowForm(true) }
   const openEdit = (c: Countdown) => {
@@ -121,9 +187,11 @@ function CustomCountdowns() {
       if (error) { console.error(error); setError('Failed to save.') }
     } else {
       setShowForm(false)
+      // New countdowns land at the top of the order.
+      const minOrder = items.reduce((m, c) => Math.min(m, c.sort_order ?? 0), 0)
       const { data, error } = await supabase
         .from('countdowns')
-        .insert({ title: name, target_date: target, color, created_by: session?.user.id })
+        .insert({ title: name, target_date: target, color, sort_order: minOrder - 1, created_by: session?.user.id })
         .select()
         .single()
       if (error) { console.error(error); setError('Failed to add.') }
@@ -138,34 +206,51 @@ function CustomCountdowns() {
     if (error) { console.error(error); setError('Failed to delete.') }
   }
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = sorted.findIndex(c => c.id === active.id)
+    const newIndex = sorted.findIndex(c => c.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    const reordered = [...sorted]
+    const [moved] = reordered.splice(oldIndex, 1)
+    reordered.splice(newIndex, 0, moved)
+    const withOrder = reordered.map((c, i) => ({ ...c, sort_order: i }))
+    setItems(withOrder)
+    try {
+      await Promise.all(withOrder.map((c, i) => supabase.from('countdowns').update({ sort_order: i }).eq('id', c.id)))
+    } catch (err) {
+      console.error('Reorder failed:', err)
+      setError('Failed to save order.')
+    }
+  }
+
   return (
     <div>
-      {sorted.map(c => {
-        const target = new Date(c.target_date)
-        const ms = target.getTime() - now.getTime()
-        const past = ms <= 0
-        const days = Math.floor(ms / (1000 * 60 * 60 * 24))
-        const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
-        const big = past ? '✿' : days >= 1 ? `${days} ${days === 1 ? 'day' : 'days'}` : `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-        const dateLabel = target.toLocaleString([], { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-        const accent = c.color || DEFAULT_COUNTDOWN_COLOR
-        return (
-          <div
-            key={c.id}
-            style={{ backgroundColor: `${accent}1A`, borderColor: `${accent}33` }}
-            className="relative border rounded-2xl p-4 mb-4 text-center"
-          >
-            <div className="absolute top-2 right-2 flex gap-1">
-              <button onClick={() => openEdit(c)} className="text-sm text-grey-soft hover:text-charcoal px-1" aria-label="Edit countdown">✎</button>
-              <button onClick={() => remove(c.id)} className="text-sm text-grey-soft hover:text-red-500 px-1" aria-label="Delete countdown">×</button>
+      {sorted.length > 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sorted.map(c => c.id)} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              {sorted.map((c, i) => (
+                <SortableCountdown
+                  key={c.id}
+                  c={c}
+                  now={now}
+                  spanFull={sorted.length === 1 || (sorted.length >= 3 && i === 0)}
+                  onEdit={openEdit}
+                  onDelete={remove}
+                />
+              ))}
             </div>
-            <div className="text-2xl font-serif" style={{ color: accent }}>{past ? `${c.title} — today!` : big}</div>
-            <div className="text-xs text-grey-soft uppercase tracking-wider mt-1">
-              {past ? dateLabel : `until ${c.title} · ${dateLabel}`}
-            </div>
-          </div>
-        )
-      })}
+          </SortableContext>
+        </DndContext>
+      )}
 
       {showForm ? (
         <form onSubmit={save} className="bg-white border border-grey-soft/20 rounded-2xl p-4 mb-4 space-y-2">
@@ -328,7 +413,19 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-serif text-charcoal">Ryan & Hannah</h1>
-          <button onClick={logout} className="px-3 py-1 text-sm text-grey-soft hover:text-charcoal transition-colors">Logout</button>
+          <div className="flex items-center gap-3">
+            <a
+              href="https://clients.foxandivory.com/portal"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Our Photographer's Portal — Fox & Ivory"
+              aria-label="Our Photographer's Portal"
+              className="text-xl hover:scale-110 transition-transform"
+            >
+              📸
+            </a>
+            <button onClick={logout} className="px-3 py-1 text-sm text-grey-soft hover:text-charcoal transition-colors">Logout</button>
+          </div>
         </div>
 
         {error && (
@@ -491,17 +588,6 @@ export default function HomePage() {
             </div>
           </Link>
         </div>
-
-        <a
-          href="https://clients.foxandivory.com/portal"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 flex items-center justify-center gap-2 bg-rose-accent/5 rounded-2xl p-4 border border-rose-accent/20 hover:bg-rose-accent/10 hover:border-rose-accent/40 transition-all"
-        >
-          <span className="text-xl">📸</span>
-          <span className="text-sm font-medium text-charcoal">Our Photographer&rsquo;s Portal</span>
-          <span className="text-xs text-rose-accent">Fox &amp; Ivory ↗</span>
-        </a>
       </div>
     </div>
   )

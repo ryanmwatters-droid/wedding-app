@@ -6,6 +6,7 @@ CREATE TABLE countdowns (
   title TEXT NOT NULL,
   target_date TIMESTAMPTZ NOT NULL,
   color TEXT NOT NULL DEFAULT '#7B8AA8',
+  sort_order INT,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT now()
 );
