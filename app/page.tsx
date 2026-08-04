@@ -231,8 +231,13 @@ function CustomCountdowns() {
     }
   }
 
+  // Until the engagement party exists as a real countdown row (migration 006),
+  // fall back to the original hardcoded banner so nothing disappears.
+  const hasEngagement = items.some(c => c.title === 'Engagement Party')
+
   return (
     <div>
+      {!hasEngagement && <CountdownBanner />}
       {sorted.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sorted.map(c => c.id)} strategy={rectSortingStrategy}>
@@ -432,7 +437,6 @@ export default function HomePage() {
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>
         )}
 
-        <CountdownBanner />
         <CustomCountdowns />
 
         <Link href="/messages" className="block bg-white rounded-2xl p-4 mb-4 border border-grey-soft/20 hover:border-rose-accent/40 transition-colors">
