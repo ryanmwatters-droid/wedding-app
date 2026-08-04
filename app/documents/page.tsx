@@ -32,6 +32,7 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [currentFolder, setCurrentFolder] = useState<string | null>(null)
+  const [folderToDelete, setFolderToDelete] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -178,6 +179,37 @@ export default function DocumentsPage() {
     setCurrentFolder(trimmed)
   }
 
+  // Remove the folder label from every file inside it — files move to Unfiled, nothing is deleted.
+  const emptyFolder = async (folder: string) => {
+    setDocs(prev => prev.map(d => d.folder === folder ? { ...d, folder: null } : d))
+    setFolderToDelete(null)
+    if (currentFolder === folder) setCurrentFolder(null)
+    try {
+      const { error } = await supabase.from('documents').update({ folder: null }).eq('folder', folder)
+      if (error) throw error
+    } catch (err) {
+      console.error('Empty folder failed:', err)
+      setError('Failed to update folder.')
+    }
+  }
+
+  // Delete the folder and every file inside it (storage objects + records).
+  const deleteFolder = async (folder: string) => {
+    const affected = docs.filter(d => d.folder === folder)
+    setDocs(prev => prev.filter(d => d.folder !== folder))
+    setFolderToDelete(null)
+    if (currentFolder === folder) setCurrentFolder(null)
+    try {
+      const paths = affected.map(d => d.storage_path)
+      if (paths.length) await supabase.storage.from('documents').remove(paths)
+      const { error } = await supabase.from('documents').delete().eq('folder', folder)
+      if (error) throw error
+    } catch (err) {
+      console.error('Delete folder failed:', err)
+      setError('Failed to delete folder.')
+    }
+  }
+
   if (!session) return <div className="min-h-screen bg-cream flex items-center justify-center">Loading...</div>
 
   return (
@@ -201,7 +233,15 @@ export default function DocumentsPage() {
             <button onClick={() => setCurrentFolder(null)} className="text-sm text-grey-soft hover:text-charcoal transition-colors">
               ← All documents
             </button>
-            <h2 className="text-xl font-serif text-charcoal mt-1">📁 {currentFolder}</h2>
+            <div className="flex items-center justify-between mt-1">
+              <h2 className="text-xl font-serif text-charcoal">📁 {currentFolder}</h2>
+              <button
+                onClick={() => setFolderToDelete(currentFolder)}
+                className="text-xs px-2 py-1 text-grey-soft hover:text-red-500 transition-colors"
+              >
+                Delete folder
+              </button>
+            </div>
           </div>
         )}
 
@@ -246,15 +286,23 @@ export default function DocumentsPage() {
                 {folders.map(folder => {
                   const count = docs.filter(d => d.folder === folder).length
                   return (
-                    <button
-                      key={folder}
-                      onClick={() => setCurrentFolder(folder)}
-                      className="text-left bg-white rounded-xl border border-grey-soft/20 p-3 hover:border-sage-primary/40 hover:shadow-sm transition-all"
-                    >
-                      <div className="text-2xl mb-1">📁</div>
-                      <div className="text-sm font-medium text-charcoal truncate">{folder}</div>
-                      <div className="text-xs text-grey-soft">{count} {count === 1 ? 'file' : 'files'}</div>
-                    </button>
+                    <div key={folder} className="relative">
+                      <button
+                        onClick={() => setCurrentFolder(folder)}
+                        className="w-full text-left bg-white rounded-xl border border-grey-soft/20 p-3 pr-8 hover:border-sage-primary/40 hover:shadow-sm transition-all"
+                      >
+                        <div className="text-2xl mb-1">📁</div>
+                        <div className="text-sm font-medium text-charcoal truncate">{folder}</div>
+                        <div className="text-xs text-grey-soft">{count} {count === 1 ? 'file' : 'files'}</div>
+                      </button>
+                      <button
+                        onClick={() => setFolderToDelete(folder)}
+                        aria-label={`Delete folder ${folder}`}
+                        className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-full text-grey-soft hover:text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        ×
+                      </button>
+                    </div>
                   )
                 })}
               </div>
@@ -323,6 +371,47 @@ export default function DocumentsPage() {
             ))}
           </div>
         )}
+
+        {folderToDelete !== null && (() => {
+          const count = docs.filter(d => d.folder === folderToDelete).length
+          return (
+            <div
+              className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+              onClick={() => setFolderToDelete(null)}
+            >
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <h3 className="text-lg font-serif text-charcoal mb-1">Delete folder “{folderToDelete}”?</h3>
+                <p className="text-sm text-grey-soft mb-5">
+                  {count === 0
+                    ? 'This folder is empty.'
+                    : `${count} ${count === 1 ? 'file is' : 'files are'} inside. Choose what to do with ${count === 1 ? 'it' : 'them'}.`}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {count > 0 && (
+                    <button
+                      onClick={() => emptyFolder(folderToDelete)}
+                      className="w-full py-2 rounded-xl border border-sage-primary/40 text-sage-primary hover:bg-sage-primary/10 transition-colors text-sm font-medium"
+                    >
+                      Move files to Unfiled
+                    </button>
+                  )}
+                  <button
+                    onClick={() => deleteFolder(folderToDelete)}
+                    className="w-full py-2 rounded-xl bg-red-500 text-white hover:bg-red-600 transition-colors text-sm font-medium"
+                  >
+                    {count > 0 ? 'Delete folder + all files' : 'Delete folder'}
+                  </button>
+                  <button
+                    onClick={() => setFolderToDelete(null)}
+                    className="w-full py-2 rounded-xl text-grey-soft hover:text-charcoal transition-colors text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
