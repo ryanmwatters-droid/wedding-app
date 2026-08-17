@@ -31,8 +31,10 @@ function AttendingDot({ attending }: { attending: boolean | null }) {
   )
 }
 
-// null/undefined = unverified (not asked yet), true = Yes, false = No
-function AllergyTag({ has }: { has: boolean | null | undefined }) {
+// null/undefined = unverified (not asked yet), true = Yes, false = No.
+// If the guest isn't attending, allergies don't apply → show N/A.
+function AllergyTag({ has, attending }: { has: boolean | null | undefined; attending: boolean | null }) {
+  if (attending === false) return <span className="text-xs text-grey-soft/40" title="Not attending">N/A</span>
   const label = has === true ? 'Yes' : has === false ? 'No' : '—'
   const cls = has === true ? 'text-rose-accent font-medium' : has === false ? 'text-grey-soft' : 'text-grey-soft/40'
   return <span className={`text-xs ${cls}`} title={has == null ? 'Unverified — not asked yet' : undefined}>{label}</span>
@@ -388,7 +390,7 @@ export function GuestList({ tableName, title, importFromTable, showAllergies }: 
                 <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} />
                 <StatusPill label="RSVP received" active={g.rsvp_received} onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })} />
                 <div className="w-12 flex justify-center"><AttendingDot attending={g.attending} /></div>
-                {showAllergies && <div className="w-16 flex justify-center"><AllergyTag has={g.has_allergy} /></div>}
+                {showAllergies && <div className="w-16 flex justify-center"><AllergyTag has={g.has_allergy} attending={g.attending} /></div>}
               </button>
             ))}
           </div>
