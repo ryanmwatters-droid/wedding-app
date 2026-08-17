@@ -7,5 +7,6 @@ export default function EngagementGuestsPage() {
     tableName="engagement_guests"
     title="Engagement Party"
     importFromTable={{ table: 'guests', label: 'Wedding List' }}
+    showAllergies
   />
 }

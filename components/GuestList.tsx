@@ -31,11 +31,12 @@ function AttendingDot({ attending }: { attending: boolean | null }) {
   )
 }
 
-function GuestDetail({ guest, onUpdate, onDelete, onClose }: {
+function GuestDetail({ guest, onUpdate, onDelete, onClose, showAllergies }: {
   guest: Guest
   onUpdate: (id: string, updates: Partial<Guest>) => void
   onDelete: (id: string) => void
   onClose: () => void
+  showAllergies?: boolean
 }) {
   return (
     <div className="p-4">
@@ -80,6 +81,37 @@ function GuestDetail({ guest, onUpdate, onDelete, onClose }: {
         />
       </div>
 
+      {showAllergies && (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm text-charcoal">Food allergies?</span>
+            <button
+              type="button"
+              onClick={() => { if (guest.food_allergy == null) onUpdate(guest.id, { food_allergy: '' }) }}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.food_allergy != null ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => onUpdate(guest.id, { food_allergy: null })}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.food_allergy == null ? 'bg-sage-primary text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+            >
+              No
+            </button>
+          </div>
+          {guest.food_allergy != null && (
+            <input
+              defaultValue={guest.food_allergy || ''}
+              onBlur={(e) => { if (e.target.value !== (guest.food_allergy || '')) onUpdate(guest.id, { food_allergy: e.target.value }) }}
+              placeholder="e.g. nut allergy"
+              autoFocus={guest.food_allergy === ''}
+              className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
+            />
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 mb-3">
         <button onClick={() => onUpdate(guest.id, { invitation_sent: !guest.invitation_sent })} className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.invitation_sent ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}>
           {guest.invitation_sent ? '✓ Invitation sent' : 'Invitation sent'}
@@ -107,10 +139,11 @@ function GuestDetail({ guest, onUpdate, onDelete, onClose }: {
   )
 }
 
-export function GuestList({ tableName, title, importFromTable }: {
+export function GuestList({ tableName, title, importFromTable, showAllergies }: {
   tableName: string
   title: string
   importFromTable?: { table: string; label: string }
+  showAllergies?: boolean
 }) {
   const { session, logout } = useAuth()
   const [guests, setGuests] = useState<Guest[]>([])
@@ -345,6 +378,9 @@ export function GuestList({ tableName, title, importFromTable }: {
               >
                 <div className="min-w-0">
                   <div className="text-charcoal font-medium truncate">{g.name}</div>
+                  {showAllergies && g.food_allergy && g.food_allergy.trim() && (
+                    <div className="text-xs text-grey-soft italic truncate">{g.food_allergy}</div>
+                  )}
                 </div>
                 <div className="text-sm text-grey-soft text-center w-12">{g.party_size}</div>
                 <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} />
@@ -359,7 +395,7 @@ export function GuestList({ tableName, title, importFromTable }: {
       {selectedGuest && (
         <div className="fixed inset-0 z-50 bg-charcoal/40 flex items-end sm:items-center justify-center" onClick={() => setSelectedId(null)}>
           <div className="bg-white w-full sm:max-w-xl max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <GuestDetail guest={selectedGuest} onUpdate={updateGuest} onDelete={deleteGuest} onClose={() => setSelectedId(null)} />
+            <GuestDetail guest={selectedGuest} onUpdate={updateGuest} onDelete={deleteGuest} onClose={() => setSelectedId(null)} showAllergies={showAllergies} />
           </div>
         </div>
       )}
