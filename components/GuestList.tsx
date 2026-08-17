@@ -31,6 +31,13 @@ function AttendingDot({ attending }: { attending: boolean | null }) {
   )
 }
 
+// null/undefined = unverified (not asked yet), true = Yes, false = No
+function AllergyTag({ has }: { has: boolean | null | undefined }) {
+  const label = has === true ? 'Yes' : has === false ? 'No' : '—'
+  const cls = has === true ? 'text-rose-accent font-medium' : has === false ? 'text-grey-soft' : 'text-grey-soft/40'
+  return <span className={`text-xs ${cls}`} title={has == null ? 'Unverified — not asked yet' : undefined}>{label}</span>
+}
+
 function GuestDetail({ guest, onUpdate, onDelete, onClose, showAllergies }: {
   guest: Guest
   onUpdate: (id: string, updates: Partial<Guest>) => void
@@ -85,27 +92,21 @@ function GuestDetail({ guest, onUpdate, onDelete, onClose, showAllergies }: {
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-sm text-charcoal">Food allergies?</span>
-            <button
-              type="button"
-              onClick={() => { if (guest.food_allergy == null) onUpdate(guest.id, { food_allergy: '' }) }}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.food_allergy != null ? 'bg-rose-accent text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
+            <select
+              value={guest.has_allergy == null ? '' : guest.has_allergy ? 'yes' : 'no'}
+              onChange={(e) => onUpdate(guest.id, { has_allergy: e.target.value === '' ? null : e.target.value === 'yes' })}
+              className="px-3 py-1 text-xs rounded-full border border-sage-primary/40 bg-sage-primary/10 text-charcoal focus:outline-none focus:ring-1 focus:ring-sage-primary/40"
             >
-              Yes
-            </button>
-            <button
-              type="button"
-              onClick={() => onUpdate(guest.id, { food_allergy: null })}
-              className={`px-3 py-1 text-xs rounded-full transition-colors ${guest.food_allergy == null ? 'bg-sage-primary text-white' : 'bg-grey-soft/20 text-charcoal hover:bg-grey-soft/30'}`}
-            >
-              No
-            </button>
+              <option value="">Unverified</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
           </div>
-          {guest.food_allergy != null && (
+          {guest.has_allergy === true && (
             <input
               defaultValue={guest.food_allergy || ''}
-              onBlur={(e) => { if (e.target.value !== (guest.food_allergy || '')) onUpdate(guest.id, { food_allergy: e.target.value }) }}
+              onBlur={(e) => { if (e.target.value !== (guest.food_allergy || '')) onUpdate(guest.id, { food_allergy: e.target.value || null }) }}
               placeholder="e.g. nut allergy"
-              autoFocus={guest.food_allergy === ''}
               className="w-full px-3 py-2 text-sm bg-cream/40 border border-grey-soft/20 rounded-lg focus:outline-none focus:ring-1 focus:ring-sage-primary/30"
             />
           )}
@@ -363,22 +364,23 @@ export function GuestList({ tableName, title, importFromTable, showAllergies }: 
           <div className="text-center text-grey-soft py-8">No guests yet. Add your first one above.</div>
         ) : (
           <div className="bg-white rounded-2xl border border-grey-soft/20 overflow-hidden">
-            <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-4 py-2 text-xs text-grey-soft border-b border-grey-soft/15">
+            <div className={`hidden sm:grid ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 px-4 py-2 text-xs text-grey-soft border-b border-grey-soft/15`}>
               <div>Name</div>
               <div className="text-center w-12">Party</div>
               <div className="text-center w-7" title="Invitation sent">Inv</div>
               <div className="text-center w-7" title="RSVP received">RSVP</div>
               <div className="text-center w-12">Attending</div>
+              {showAllergies && <div className="text-center w-16" title="Food allergies?">Allergies</div>}
             </div>
             {guests.map(g => (
               <button
                 key={g.id}
                 onClick={() => setSelectedId(g.id)}
-                className="w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0"
+                className={`w-full grid ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 items-center px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0`}
               >
                 <div className="min-w-0">
                   <div className="text-charcoal font-medium truncate">{g.name}</div>
-                  {showAllergies && g.food_allergy && g.food_allergy.trim() && (
+                  {showAllergies && g.has_allergy === true && g.food_allergy && g.food_allergy.trim() && (
                     <div className="text-xs text-grey-soft italic truncate">{g.food_allergy}</div>
                   )}
                 </div>
@@ -386,6 +388,7 @@ export function GuestList({ tableName, title, importFromTable, showAllergies }: 
                 <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} />
                 <StatusPill label="RSVP received" active={g.rsvp_received} onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })} />
                 <div className="w-12 flex justify-center"><AttendingDot attending={g.attending} /></div>
+                {showAllergies && <div className="w-16 flex justify-center"><AllergyTag has={g.has_allergy} /></div>}
               </button>
             ))}
           </div>

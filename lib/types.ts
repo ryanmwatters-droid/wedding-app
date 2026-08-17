@@ -125,6 +125,7 @@ export interface Guest {
   attending: boolean | null
   meal: string | null
   notes: string | null
+  has_allergy?: boolean | null
   food_allergy?: string | null
 }
 
