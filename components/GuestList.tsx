@@ -7,11 +7,11 @@ import { Guest } from '@/lib/types'
 import { useAuth } from '@/lib/useAuth'
 import { ContactList } from '@/components/ContactList'
 
-function StatusPill({ label, active, onClick }: { label: string; active: boolean; onClick: (e: React.MouseEvent) => void }) {
+function StatusPill({ label, active, onClick, className = '' }: { label: string; active: boolean; onClick: (e: React.MouseEvent) => void; className?: string }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(e) }}
-      className={`w-7 h-7 rounded-full text-xs font-medium transition-colors flex items-center justify-center ${active ? 'bg-rose-accent text-white' : 'bg-grey-soft/15 text-grey-soft hover:bg-grey-soft/25'}`}
+      className={`w-7 h-7 rounded-full text-xs font-medium transition-colors flex items-center justify-center ${active ? 'bg-rose-accent text-white' : 'bg-grey-soft/15 text-grey-soft hover:bg-grey-soft/25'} ${className}`}
       title={label}
       aria-label={label}
     >
@@ -366,19 +366,25 @@ export function GuestList({ tableName, title, importFromTable, showAllergies }: 
           <div className="text-center text-grey-soft py-8">No guests yet. Add your first one above.</div>
         ) : (
           <div className="bg-white rounded-2xl border border-grey-soft/20 overflow-hidden">
-            <div className={`hidden sm:grid ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 px-4 py-2 text-xs text-grey-soft border-b border-grey-soft/15`}>
+            <div className={`${showAllergies ? 'grid' : 'hidden sm:grid'} ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 px-4 py-2 text-xs text-grey-soft border-b border-grey-soft/15`}>
               <div>Name</div>
               <div className="text-center w-12">Party</div>
-              <div className="text-center w-7" title="Invitation sent">Inv</div>
-              <div className="text-center w-7" title="RSVP received">RSVP</div>
-              <div className="text-center w-12">Attending</div>
-              {showAllergies && <div className="text-center w-16" title="Food allergies?">Allergies</div>}
+              <div className={`text-center w-7 ${showAllergies ? 'hidden sm:block' : ''}`} title="Invitation sent">Inv</div>
+              <div className={`text-center w-7 ${showAllergies ? 'hidden sm:block' : ''}`} title="RSVP received">RSVP</div>
+              <div className="text-center w-12">
+                {showAllergies ? (<><span className="sm:hidden">Going</span><span className="hidden sm:inline">Attending</span></>) : 'Attending'}
+              </div>
+              {showAllergies && (
+                <div className="text-center w-16" title="Food allergies?">
+                  <span className="sm:hidden">Allergy</span><span className="hidden sm:inline">Allergies</span>
+                </div>
+              )}
             </div>
             {guests.map(g => (
               <button
                 key={g.id}
                 onClick={() => setSelectedId(g.id)}
-                className={`w-full grid ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 items-center px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0`}
+                className={`w-full grid ${showAllergies ? 'grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1fr_auto_auto_auto_auto_auto]' : 'grid-cols-[1fr_auto_auto_auto_auto]'} gap-3 items-center px-4 py-3 text-left hover:bg-cream/40 transition-colors border-b border-grey-soft/10 last:border-0`}
               >
                 <div className="min-w-0">
                   <div className="text-charcoal font-medium truncate">{g.name}</div>
@@ -387,8 +393,8 @@ export function GuestList({ tableName, title, importFromTable, showAllergies }: 
                   )}
                 </div>
                 <div className="text-sm text-grey-soft text-center w-12">{g.party_size}</div>
-                <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} />
-                <StatusPill label="RSVP received" active={g.rsvp_received} onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })} />
+                <StatusPill label="Invitation sent" active={g.invitation_sent} onClick={() => updateGuest(g.id, { invitation_sent: !g.invitation_sent })} className={showAllergies ? 'hidden sm:flex' : ''} />
+                <StatusPill label="RSVP received" active={g.rsvp_received} onClick={() => updateGuest(g.id, { rsvp_received: !g.rsvp_received })} className={showAllergies ? 'hidden sm:flex' : ''} />
                 <div className="w-12 flex justify-center"><AttendingDot attending={g.attending} /></div>
                 {showAllergies && <div className="w-16 flex justify-center"><AllergyTag has={g.has_allergy} attending={g.attending} /></div>}
               </button>
